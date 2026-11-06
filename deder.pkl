@@ -1,0 +1,39 @@
+amends "https://sake92.github.io/deder/config/v0.22.2/DederProject.pkl"
+
+local const core = new CreateCrossModules {
+  root = "potateh"
+  template = new {
+    scalaVersion = "3.9.0"
+    javaVersion = "21"
+    javaHome = read("env:JAVA_HOME")
+    scalacOptions { "-release:21"; "-deprecation"; "-feature" }
+    publish = true
+    pomSettings = new {
+      groupId = "ba.sake"
+      artifactId = "potateh"
+      version = "0.1.0-SNAPSHOT"
+      name = "potateh"
+      description = "Blocking HTTP/1 server for Scala"
+      url = "https://github.com/sake92/potateh"
+      licenses { new PomLicense { name = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0" } }
+    }
+  }
+  testTemplate = (template.asTest()) {
+    deps { "org.scalameta::munit::1.3.6" }
+    testParallelism = 1
+  }
+  nativeTemplate = (template.asNative()) {
+    scalaNativeVersion = "0.5.12"
+    multithreading = true
+  }
+  nativeTestTemplate = (nativeTemplate.asTest()) {
+    deps { "org.scalameta::munit::1.3.6" }
+  }
+}.get
+
+modules {
+  core.jvm
+  core.jvm_test
+  core.native
+  core.native_test
+}

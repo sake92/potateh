@@ -1,0 +1,5 @@
+potateh contains HTTP syntax, framing and timeout code and adapted test scenarios
+from scalanative-jdk-sun-httpserver by its contributors, Apache-2.0 licensed:
+https://github.com/sake92/scalanative-jdk-sun-httpserver
+Source revision: 7cd8160eee9702f02a13e273b80cb5391d9283d1.
+Modified for immutable Scala contracts, configuration and exchange ownership.
