@@ -28,7 +28,7 @@ object ResponseBody {
   case object Empty extends ResponseBody
   final class Bytes private[ResponseBody] (private[potateh] val value: Array[Byte]) extends ResponseBody
   def bytes(value: Array[Byte]): ResponseBody = new Bytes(value.clone())
-  final case class Writer(length: Option[Long] = None)(write: OutputStream => Unit) extends ResponseBody {
+  final case class Writer(length: Option[Long] = None)(val write: OutputStream => Unit) extends ResponseBody {
     require(length.forall(_ >= 0), "Negative response length")
   }
 }

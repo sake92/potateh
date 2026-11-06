@@ -110,3 +110,8 @@ The same core callback API serves HTTP on JVM/Java 21 and Scala Native; relevant
 - Checkpoint 1: bootstrapped Deder 0.22.2, Scala 3.9.0, Java 21 and Native
   0.5.12 with multithreading enabled. Shared MUnit 1.3.6 contracts/thread tests
   pass on both targets (3 tests per target). Defaults are recorded in README.md.
+- Checkpoint 2: strict parser and all four framing streams ported with direct
+  MUnit adaptations. Response writer uses body variants and rejects application
+  framing/connection headers. Trailer fields are separate and body failures
+  remain terminal. JVM and Native MUnit runs pass; Native linking required
+  avoiding java.util.Locale (case-insensitive comparisons are shared).
