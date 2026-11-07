@@ -1,5 +1,10 @@
 amends "https://sake92.github.io/deder/config/v0.22.2/DederProject.pkl"
 
+local const publishRepo = if (read?("env:DEDER_PUBLISH_SNAPSHOT") == "true")
+  new SonatypeSnapshotRepo { id = "sonatype" }
+else
+  new SonatypeCentralRepo { id = "sonatype" }
+
 local const core = new CreateCrossModules {
   root = "potateh"
   template = new {
@@ -8,14 +13,25 @@ local const core = new CreateCrossModules {
     javaHome = read("env:JAVA_HOME")
     scalacOptions { "-release:21"; "-deprecation"; "-feature" }
     publish = true
+    publishTo = publishRepo
     pomSettings = new {
       groupId = "ba.sake"
       artifactId = "potateh"
-      version = "0.1.0-SNAPSHOT"
       name = "potateh"
       description = "Blocking HTTP/1 server for Scala"
       url = "https://github.com/sake92/potateh"
       licenses { new PomLicense { name = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0" } }
+      developers {
+        new PomDeveloper {
+          id = "sake92"
+          name = "Sakib Hadžiavdić"
+          email = "sake92@sake.ba"
+        }
+      }
+      scm {
+        url = "https://github.com/sake92/potateh"
+        connection = "scm:git:git@github.com:sake92/potateh.git"
+      }
     }
   }
   testTemplate = (template.asTest()) {
