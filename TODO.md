@@ -21,3 +21,8 @@ Unchecked items are outstanding work, not implemented protections or confirmed v
 JDK 8/Scala 2 compatibility, protected-realm mutation, Java binary compatibility and upstream JDK API placement are intentionally dropped from the source backlog. HTTPS, HTTP/2, provider discovery, upgrades/WebSockets and CONNECT tunnels remain exclusions, not planned commitments.
 
 Keep raw reports and one-off diagnostics in ignored build output. Record completed behavior and reproducible validation concisely in the eventual compatibility/conformance documentation, then remove completed backlog entries.
+
+## Misc
+
+- scalafmt
+- null safety

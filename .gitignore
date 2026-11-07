@@ -7,4 +7,6 @@ hs_err_pid*
 .deder/
 .bsp/
 .scala-build/
+.basamake/
+
 conformance/out/
