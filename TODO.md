@@ -6,7 +6,6 @@ Unchecked items are outstanding work, not implemented protections or confirmed v
 
 - [ ] Extend the ported bounded slow-client tests to sustained load and representative slow/streaming traffic using potateh's configuration and owned workers.
 - [ ] Evaluate Nmap `http-slowloris-check` alongside measured exhaustion tests.
-- [ ] Add reproducible Scala grammar/stateful fuzzing for malformed messages, framing boundaries and persistent-connection sequences; preserve failing seeds as regressions.
 - [ ] Test request-boundary disagreements through a real reverse proxy and potateh; distinguish deployment findings from direct-server findings.
 - [ ] Expand RFC coverage beyond external suites without treating suite preferences as normative requirements.
 

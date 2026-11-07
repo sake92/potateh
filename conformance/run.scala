@@ -3,6 +3,7 @@
 //> using dep com.lihaoyi::ujson:4.4.1
 //> using dep org.apache.ant:ant:1.10.15
 //> using file SlowClients.scala
+//> using file Fuzzing.scala
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
@@ -28,8 +29,9 @@ object ConformanceRunner {
 
   @main
   def run(
-      @arg(doc = "h1spec, http11probe, slowclients or slowhttptest") suite: String,
-      @arg(doc = "External suite checkout at the pinned commit; not needed for slowclients") checkout: String = "",
+      @arg(doc = "h1spec, http11probe, slowclients, slowhttptest or fuzz") suite: String,
+      @arg(doc = "External suite checkout at the pinned commit; not needed for slowclients or fuzz") checkout: String =
+        "",
       @arg(doc = "Server command; single/double quotes group arguments, no shell expansion") server: String,
       @arg(doc = "New results directory; must not exist") output: String,
       deno: String = "deno",
@@ -39,7 +41,9 @@ object ConformanceRunner {
         doc = "Built Http11Probe.Cli.dll"
       ) probeDll: Option[String] = None,
       @arg(doc = "Repeatable Http11Probe category; default: all core categories") category: Seq[String] = Seq.empty,
-      @arg(doc = "Maximum seconds per external probe invocation") timeout: Double = 900,
+      @arg(doc =
+        "Maximum seconds per external probe invocation or fuzz campaign (excluding startup/cleanup)"
+      ) timeout: Double = 900,
       @arg(doc = "Slow-client admission: both, roomy or limited") capacity: String = "both",
       @arg(doc = "Slow-client observation seconds, 3–30; idle-drip always runs 32 seconds") duration: Int = 3,
       @arg(
@@ -49,14 +53,23 @@ object ConformanceRunner {
       @arg(
         name = "idle-drip-expectation",
         doc = "32-second drip result: observe, close or survive; slowclients only"
-      ) idleDripExpectation: String = "observe"
+      ) idleDripExpectation: String = "observe",
+      @arg(doc = "Fuzz generator seed (signed 64-bit integer)") seed: Long = 1L,
+      @arg(doc = "Fuzz case count, 1–100000") iterations: Int = 256,
+      @arg(doc = "First fuzz case index; replay with --iterations 1") startCase: Int = 0
   ): Int = {
     try {
       require(
-        pins.contains(suite) || suite == "slowclients",
+        pins.contains(suite) || suite == "slowclients" || suite == "fuzz",
         "Unknown --suite; see --help"
       )
       val slow = suite == "slowclients" || suite == "slowhttptest"
+      require(iterations >= 1 && iterations <= 100000, "--iterations must be between 1 and 100000")
+      require(startCase >= 0 && startCase <= Int.MaxValue - iterations, "--start-case is outside the supported range")
+      require(
+        suite == "fuzz" || (seed == 1L && iterations == 256 && startCase == 0),
+        "--seed, --iterations and --start-case require --suite fuzz"
+      )
       require(
         Set("both", "roomy", "limited").contains(capacity),
         "Unknown --capacity"
@@ -91,6 +104,7 @@ object ConformanceRunner {
         timeout.isFinite && timeout > 0,
         "--timeout must be finite and positive"
       )
+      require(suite != "fuzz" || timeout <= 3600, "Fuzz --timeout must be at most 3600 seconds")
       require(
         category.forall(categories.contains),
         "Unknown --category; see conformance/README.md"
@@ -112,7 +126,7 @@ object ConformanceRunner {
         s"Results directory already exists: $destination; choose a new --output"
       )
       val revision = {
-        if (suite == "slowclients") {
+        if (suite == "slowclients" || suite == "fuzz") {
           capture(Seq("git", "rev-parse", "HEAD")).trim
         } else {
           require(
@@ -151,7 +165,9 @@ object ConformanceRunner {
       }
       Option(destination.getParent).foreach(Files.createDirectories(_))
       Files.createDirectory(destination)
-      if (slow) {
+      if (suite == "fuzz") {
+        Fuzzing.run(command, destination, seed, startCase, iterations, timeout, revision)
+      } else if (slow) {
         SlowClients.run(
           suite,
           source,

@@ -1,4 +1,4 @@
-# Run external HTTP checks
+# Run HTTP checks
 
 Use Linux, Java 21, Deder 0.22.2, Scala CLI, clang/libunwind, Git, npm, and
 .NET SDK 10.0.100. External tools stay outside the library and under ignored
@@ -85,6 +85,46 @@ two admitted active workers. `--case NAME` selects cases; `--duration 3` through
 Recovery and process shutdown must complete within five seconds. Availability
 samples under pressure remain measurements, not pass/fail resilience claims.
 
+# Run seeded fuzzing
+
+After building the fixtures and runner above, run the same seed on each target.
+Fuzzing needs no external suite checkout or tools beyond the runner and fixtures:
+
+```sh
+java -jar conformance/out/runner.jar --suite fuzz --seed 1 --iterations 1000 \
+  --server 'java -jar .deder/out/fixture-jvm/assembly/out.jar' \
+  --output conformance/out/jvm-fuzz-seed1
+
+java -jar conformance/out/runner.jar --suite fuzz --seed 1 --iterations 1000 \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/native-fuzz-seed1
+```
+
+On failure, use the reported seed and case index with `--start-case INDEX
+--iterations 1` and a fresh output directory. `failure.json` records the request
+steps, expected responses and write sizes; `request.bin`, `response.bin` and
+`server.log` retain wire diagnostics. `current.json` retains the last attempted
+case if interrupted. Keep a discovered bug's seed/index and a focused regression
+in `ServerTest` or the relevant codec suite when fixing it. Replay requires the
+same generator version; the report records that version and the source revision.
+
+The 48 families mix generated fixed/chunked/empty bodies, body-embedded decoy
+requests, trailers, HTTP/1.0 keep-alive, staged exchanges and pipelines. Mutations
+cover ambiguous framing, invalid syntax, truncation and exact/over-limit request,
+header, chunk, extension, trailer and body budgets. The fixture uses small limits
+to exercise boundaries without large allocations; library defaults are unchanged.
+Checks require exact ordered status/body echoes, terminal closure without an
+extra response, and recovery on a fresh connection after every case.
+
+`--iterations` defaults to 256 (maximum 100000). Each connection has a five-second
+deadline, response reads are capped at 64 KiB, and each generated write step is
+at most 16 KiB. Terminal closure must arrive within 500 ms. `--timeout` caps the
+campaign (default 900 seconds, maximum 3600), excluding startup and cleanup.
+Fixture shutdown uses the stop file and must finish successfully within five
+seconds. Write schedules vary between whole buffers, single bytes and random
+fragments; TCP may coalesce writes. This is deterministic grammar/stateful
+testing, not coverage-guided fuzzing, exhaustive fragmentation or a load test.
+
 # Interpret results
 
 h1spec uses one socket read and a 500 ms timeout per case. Valid fragmented
@@ -124,6 +164,12 @@ Native 0.5.12 release-fast with multithreading:
 | Http11Probe (five categories, raw verdicts) | 155 Pass, 40 Warn, 1 Fail | 155 Pass, 40 Warn, 1 Fail |
 | slowhttptest (three modes, two admission capacities) | 6/6 | 6/6 |
 | slowclients (ten cases, two admission capacities) | 20/20 | 20/20 |
+| Seeded fuzzing (48 families; seeds 1 and 8675309) | 2000/2000 | 2000/2000 |
+
+The fuzzing baseline used local changes based on `bfbc050`, with 1000 cases per
+seed and recovery after every case. Both fixtures completed file-triggered
+shutdown. A deliberately faulty temporary fixture verified nonzero failure
+reporting and replay; no server defect was found by these bounded campaigns.
 
 Http11Probe executed 196 distinct tests per target, excluding 17 cookie/WebSocket
 cases. Its one failure is the empty-Host disagreement above; both runner exits

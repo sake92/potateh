@@ -15,19 +15,35 @@ object ConformanceServer {
   def main(args: Array[String]): Unit = {
     val profile = sys.env.getOrElse("HTTP_CONFORMANCE_PROFILE", "h1spec")
     require(
-      Set("h1spec", "http11probe", "slowclients", "slowhttptest").contains(
+      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "fuzz").contains(
         profile
       )
     )
     val slow = profile == "slowclients" || profile == "slowhttptest"
+    val fuzz = profile == "fuzz"
     val capacity = sys.env.getOrElse("HTTP_CONFORMANCE_CAPACITY", "roomy")
     require(Set("roomy", "limited").contains(capacity))
     val active = new AtomicInteger
     val settings = ServerConfig(
       bindAddress = new InetSocketAddress("127.0.0.1", 0),
       maxConnections = if (slow && capacity == "limited") 2 else 128,
-      limits = HttpLimits(bodyBytes = Some(8L * 1024 * 1024)),
-      timeouts = HttpTimeouts(shutdownGrace = 200.millis)
+      limits = if (fuzz) {
+        HttpLimits(
+          requestLineBytes = 128,
+          headerLineBytes = 128,
+          headerSectionBytes = 512,
+          headerCount = 8,
+          chunkLineBytes = 64,
+          chunkExtensionBytes = 96,
+          trailerLineBytes = 64,
+          trailerSectionBytes = 128,
+          trailerCount = 4,
+          bodyBytes = Some(256)
+        )
+      } else HttpLimits(bodyBytes = Some(8L * 1024 * 1024)),
+      timeouts = if (fuzz) {
+        HttpTimeouts(idle = 2.seconds, head = 2.seconds, bodyRead = 2.seconds, shutdownGrace = 200.millis)
+      } else HttpTimeouts(shutdownGrace = 200.millis)
     )
     val server = Server.start(settings) { request =>
       if (slow) {
@@ -48,7 +64,13 @@ object ConformanceServer {
         active.incrementAndGet()
         try {
           val bytes = {
-            if (
+            if (fuzz) {
+              val sink = new ByteArrayOutputStream
+              request.body.transferTo(sink)
+              val trailers = request.body.trailers.getOrElse(throw new IllegalStateException("Incomplete body"))
+              val prefix = request.target + "\n" + trailers.first("X-End").getOrElse("") + "\n"
+              prefix.getBytes(UTF_8) ++ sink.toByteArray
+            } else if (
               profile == "http11probe" && request.target.takeWhile(
                 _ != '?'
               ) == "/echo"
@@ -105,10 +127,10 @@ object ConformanceServer {
           )
           println("SMOKE PASSED")
         } finally socket.close()
-      } else if (slow) {
+      } else if (slow || fuzz) {
         val stop = Paths.get(sys.env("HTTP_CONFORMANCE_STOP_FILE"))
         while (!Files.exists(stop)) {
-          println("WORKERS active=" + active.get()); System.out.flush()
+          if (slow) { println("WORKERS active=" + active.get()); System.out.flush() }
           Thread.sleep(100)
         }
       } else new CountDownLatch(1).await()
