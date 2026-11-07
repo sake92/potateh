@@ -168,6 +168,46 @@ all load threads are cancelled, sockets closed and threads joined before fixture
 shutdown. Failure/interruption retains an incomplete report and requests file
 shutdown, with process-group termination as a fallback.
 
+# Run Nmap's Slowloris check
+
+With Nmap on `PATH`, start a fresh fixture in one terminal:
+
+```sh
+mkdir conformance/out/nmap-native
+HTTP_CONFORMANCE_PROFILE=nmap \
+HTTP_CONFORMANCE_STOP_FILE="$PWD/conformance/out/nmap-native/stop" \
+  .deder/out/fixture-native/nativeLink/fixture-native
+```
+
+In another terminal, replace `PORT` with the printed `LISTENING` port:
+
+```sh
+curl --fail --max-time 2 http://127.0.0.1:PORT/probe
+nmap --unprivileged -sT -Pn -n -p PORT \
+  --script +http-slowloris-check --script-args vulns.showall=true \
+  --script-timeout 45s --host-timeout 60s \
+  -oA conformance/out/nmap-native/scan 127.0.0.1
+curl --fail --max-time 2 http://127.0.0.1:PORT/probe
+touch conformance/out/nmap-native/stop
+```
+
+For JVM, start `java -jar .deder/out/fixture-jvm/assembly/out.jar` instead and use
+a fresh directory. Repeat with `HTTP_CONFORMANCE_PROFILE=slowclients` for the
+default ten-second head deadline. The `nmap` profile uses fifteen seconds so
+the script's delayed header arrives before the absolute deadline.
+
+`+` forces execution on an otherwise unrecognized ephemeral HTTP port;
+`vulns.showall=true` requests explicit `NOT VULNERABLE` output. Require that
+script result in the XML report. Missing output, a skipped script, or a zero
+process exit alone is not a passing verdict. Check normal requests before/after
+the scan and wait for the fixture's completed-stop marker.
+
+This [NSE script](https://nmap.org/nsedoc/scripts/http-slowloris-check.html)
+opens two incomplete requests and adds a header to one after ten seconds. Its
+timing comparison is a timeout-extension heuristic, not an exhaustion test.
+Read it alongside the sustained mixed-traffic results above; neither a negative
+nor a positive heuristic verdict establishes a full denial-of-service outcome.
+
 # Interpret results
 
 h1spec uses one socket read and a 500 ms timeout per case. Valid fragmented
@@ -209,6 +249,15 @@ Native 0.5.12 release-fast with multithreading:
 | slowclients (ten cases, two admission capacities) | 20/20 | 20/20 |
 | Seeded fuzzing (48 families; seeds 1 and 8675309) | 2000/2000 | 2000/2000 |
 | Sustained mixed traffic (60 seconds per capacity, 16 pressure + 4 legitimate clients) | 2/2 | 2/2 |
+| Nmap `http-slowloris-check` (10-/15-second head deadlines) | 2 explicit negatives | 2 explicit negatives |
+
+Nmap 7.94SVN reported `NOT VULNERABLE` for both head deadlines on both targets;
+its debug timing differences rounded to zero. A temporary control server that
+deliberately extends its timeout reported `LIKELY VULNERABLE` with an 18-second
+difference. Ordinary HTTP worked before/after each scan and every fixture
+completed file-triggered shutdown. Raw XML/logs, commands, binary version and
+NSE script SHA-256 are under ignored `conformance/out/nmap-evaluation`. These
+heuristic results complement the measured admission/recovery checks below.
 
 The sustained baseline used local changes based on `f0fc4a7`. All legitimate
 roles progressed throughout the spare-capacity runs without transport failures.

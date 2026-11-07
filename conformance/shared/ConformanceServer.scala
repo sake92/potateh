@@ -15,12 +15,12 @@ object ConformanceServer {
   def main(args: Array[String]): Unit = {
     val profile = sys.env.getOrElse("HTTP_CONFORMANCE_PROFILE", "h1spec")
     require(
-      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "sustained", "fuzz").contains(
+      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "sustained", "fuzz", "nmap").contains(
         profile
       )
     )
     val sustained = profile == "sustained"
-    val slow = profile == "slowclients" || profile == "slowhttptest" || sustained
+    val slow = profile == "slowclients" || profile == "slowhttptest" || sustained || profile == "nmap"
     val fuzz = profile == "fuzz"
     val capacity = sys.env.getOrElse("HTTP_CONFORMANCE_CAPACITY", "roomy")
     require(Set("roomy", "limited").contains(capacity))
@@ -52,6 +52,8 @@ object ConformanceServer {
           write = 1.second,
           shutdownGrace = 200.millis
         )
+      } else if (profile == "nmap") {
+        HttpTimeouts(head = 15.seconds, shutdownGrace = 200.millis)
       } else HttpTimeouts(shutdownGrace = 200.millis)
     )
     val server = Server.start(settings) { request =>

@@ -4,7 +4,6 @@ Unchecked items are outstanding work, not implemented protections or confirmed v
 
 ## Hardening validation
 
-- [ ] Evaluate Nmap `http-slowloris-check` alongside measured exhaustion tests.
 - [ ] Test request-boundary disagreements through a real reverse proxy and potateh; distinguish deployment findings from direct-server findings.
 - [ ] Expand RFC coverage beyond external suites without treating suite preferences as normative requirements.
 

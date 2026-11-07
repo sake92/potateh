@@ -28,3 +28,9 @@ Only the JVM/Java 21 and Linux Scala Native builds exercised here are covered.
 macOS and Windows remain unverified. Passing bounded socket tests does not imply
 sustained-load resilience. External suites and their qualifications belong in
 [conformance/README.md](conformance/README.md).
+
+Scala Native 0.5.12 can report `Connection refused` from timed `Socket.connect`
+when the peer accepts and immediately closes before connect returns. Admission
+tests accept this outcome only for deliberately rejected excess connections;
+queued-connection and fresh-request checks still detect a stopped server.
+The executor-rejection test waits for the client to connect before rejecting it.

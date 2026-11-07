@@ -1,7 +1,7 @@
 package ba.sake.potateh
 
 import java.io.{ByteArrayOutputStream, IOException, InputStream, OutputStream}
-import java.net.{InetSocketAddress, Socket, SocketException, SocketTimeoutException}
+import java.net.{ConnectException, InetSocketAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.ISO_8859_1
 import java.util.concurrent.{CountDownLatch, Executor, Executors, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -105,6 +105,21 @@ class ServerTest extends munit.FunSuite {
     catch { case _: SocketException => -1 }
     assertEquals(actual, -1)
   }
+  private def admissionRejected(server: Server): Unit = {
+    val socket = new Socket()
+    try {
+      // Native's timed connect may observe the peer's immediate close as refusal.
+      // Only intentional admission rejections allow this; ordinary connections must still succeed.
+      val connected = try {
+        socket.connect(server.address, 1000)
+        true
+      } catch { case _: ConnectException => false }
+      if (connected) {
+        socket.setSoTimeout(3000)
+        closed(socket)
+      }
+    } finally socket.close()
+  }
   private def await(latch: CountDownLatch): Unit = {
     val completed = latch.await(3, TimeUnit.SECONDS); assert(completed)
   }
@@ -155,17 +170,22 @@ class ServerTest extends munit.FunSuite {
   }
 
   test("executor rejection closes the socket and releases admission without stopping the server") {
+    val connected = new CountDownLatch(1)
     val submissions = new AtomicInteger
     val pool = Executors.newSingleThreadExecutor()
     val executor: Executor = task => {
       if (submissions.getAndIncrement() == 0) {
+        await(connected)
         throw new RejectedExecutionException("saturated")
       }
       pool.execute(task)
     }
     val server = Server.start(config.withMaxConnections(1), executor)(_ => response("ok"))
     try {
-      withSocket(server)(closed)
+      withSocket(server) { socket =>
+        connected.countDown()
+        closed(socket)
+      }
       eventually() {
         withSocket(server) { socket =>
           send(socket, get())
@@ -173,6 +193,7 @@ class ServerTest extends munit.FunSuite {
         }
       }
     } finally {
+      connected.countDown()
       server.stop()
       pool.shutdownNow()
       assert(pool.awaitTermination(3, TimeUnit.SECONDS))
@@ -199,7 +220,11 @@ class ServerTest extends munit.FunSuite {
       withSocket(server) { queued =>
         send(queued, get())
         await(submitted)
-        withSocket(server)(closed)
+        admissionRejected(server)
+        // A stopped server would close this queued connection too; refusal must not hide that failure.
+        queued.setSoTimeout(100)
+        intercept[SocketTimeoutException](queued.getInputStream.read())
+        queued.setSoTimeout(3000)
         server.stop()
         closed(queued)
         release.countDown()
@@ -710,7 +735,7 @@ class ServerTest extends munit.FunSuite {
       try {
         withSocket(server) { first =>
           send(first, get("/hold")); await(entered)
-          withSocket(server)(closed)
+          admissionRejected(server)
           release.countDown(); assertEquals(receive(first).body, "ok")
         }
       } finally release.countDown()
@@ -982,11 +1007,16 @@ class ServerTest extends munit.FunSuite {
         withSocket(server) { first =>
           withSocket(server) { second =>
             send(first, get()); send(second, get()); await(entered)
-            (0 until 8).foreach(_ => withSocket(server)(closed))
+            (0 until 8).foreach(_ => admissionRejected(server))
             assertEquals(calls.get(), 2)
             release.countDown()
             assertEquals(receive(first).body, "ok")
             assertEquals(receive(second).body, "ok")
+          }
+        }
+        eventually() {
+          withSocket(server) { socket =>
+            send(socket, get()); assertEquals(receive(socket).body, "ok")
           }
         }
       } finally release.countDown()
