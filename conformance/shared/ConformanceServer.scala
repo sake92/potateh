@@ -15,13 +15,15 @@ object ConformanceServer {
   def main(args: Array[String]): Unit = {
     val profile = sys.env.getOrElse("HTTP_CONFORMANCE_PROFILE", "h1spec")
     require(
-      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "sustained", "fuzz", "nmap").contains(
+      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "sustained", "fuzz", "nmap", "proxy").contains(
         profile
       )
     )
     val sustained = profile == "sustained"
     val slow = profile == "slowclients" || profile == "slowhttptest" || sustained || profile == "nmap"
     val fuzz = profile == "fuzz"
+    val proxy = profile == "proxy"
+    def hex(bytes: Array[Byte]): String = bytes.map(b => f"${b & 0xff}%02x").mkString
     val capacity = sys.env.getOrElse("HTTP_CONFORMANCE_CAPACITY", "roomy")
     require(Set("roomy", "limited").contains(capacity))
     val active = new AtomicInteger
@@ -57,6 +59,12 @@ object ConformanceServer {
       } else HttpTimeouts(shutdownGrace = 200.millis)
     )
     val server = Server.start(settings) { request =>
+      if (proxy) {
+        println(
+          s"PROXY_HEAD\t${request.remoteAddress.getPort}\t${request.method}\t${hex(request.target.getBytes(UTF_8))}"
+        )
+        System.out.flush()
+      }
       if (slow) {
         println("HANDLING " + request.target)
         System.out.flush()
@@ -88,7 +96,16 @@ object ConformanceServer {
         active.incrementAndGet()
         try {
           val bytes = {
-            if (fuzz) {
+            if (proxy) {
+              val sink = new ByteArrayOutputStream
+              request.body.transferTo(sink)
+              val body = sink.toByteArray
+              val target = hex(request.target.getBytes(UTF_8))
+              val payload = hex(body)
+              println(s"PROXY_BODY\t${request.remoteAddress.getPort}\t${request.method}\t$target\t$payload")
+              System.out.flush()
+              s"${request.method}\t$target\t$payload".getBytes(UTF_8)
+            } else if (fuzz) {
               val sink = new ByteArrayOutputStream
               request.body.transferTo(sink)
               val trailers = request.body.trailers.getOrElse(throw new IllegalStateException("Incomplete body"))
@@ -151,7 +168,7 @@ object ConformanceServer {
           )
           println("SMOKE PASSED")
         } finally socket.close()
-      } else if (slow || fuzz) {
+      } else if (slow || fuzz || proxy) {
         val stop = Paths.get(sys.env("HTTP_CONFORMANCE_STOP_FILE"))
         while (!Files.exists(stop)) {
           if (slow) { println("WORKERS active=" + active.get()); System.out.flush() }

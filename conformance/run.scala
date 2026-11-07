@@ -5,6 +5,7 @@
 //> using file SlowClients.scala
 //> using file Fuzzing.scala
 //> using file SustainedLoad.scala
+//> using file proxy/ProxyBoundaries.scala
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
@@ -30,7 +31,7 @@ object ConformanceRunner {
 
   @main
   def run(
-      @arg(doc = "h1spec, http11probe, slowclients, slowhttptest, sustained or fuzz") suite: String,
+      @arg(doc = "h1spec, http11probe, slowclients, slowhttptest, sustained, fuzz or proxy") suite: String,
       @arg(doc = "External suite checkout at the pinned commit; omit for built-in suites") checkout: String = "",
       @arg(doc = "Server command; single/double quotes group arguments, no shell expansion") server: String,
       @arg(doc = "New results directory; must not exist") output: String,
@@ -63,7 +64,7 @@ object ConformanceRunner {
   ): Int = {
     try {
       require(
-        pins.contains(suite) || Set("slowclients", "sustained", "fuzz").contains(suite),
+        pins.contains(suite) || Set("slowclients", "sustained", "fuzz", "proxy").contains(suite),
         "Unknown --suite; see --help"
       )
       val slow = suite == "slowclients" || suite == "slowhttptest"
@@ -133,7 +134,7 @@ object ConformanceRunner {
         s"Results directory already exists: $destination; choose a new --output"
       )
       val revision = {
-        if (Set("slowclients", "sustained", "fuzz").contains(suite)) {
+        if (Set("slowclients", "sustained", "fuzz", "proxy").contains(suite)) {
           capture(Seq("git", "rev-parse", "HEAD")).trim
         } else {
           require(
@@ -172,7 +173,9 @@ object ConformanceRunner {
       }
       Option(destination.getParent).foreach(Files.createDirectories(_))
       Files.createDirectory(destination)
-      if (sustained) {
+      if (suite == "proxy") {
+        ProxyBoundaries.run(command, destination, revision)
+      } else if (sustained) {
         SustainedLoad.run(command, destination, capacity, seconds, connections, revision)
       } else if (suite == "fuzz") {
         Fuzzing.run(command, destination, seed, startCase, iterations, timeout, revision)

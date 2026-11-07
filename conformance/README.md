@@ -86,6 +86,46 @@ two admitted active workers. `--case NAME` selects cases; `--duration 3` through
 Recovery and process shutdown must complete within five seconds. Availability
 samples under pressure remain measurements, not pass/fail resilience claims.
 
+# Run reverse-proxy checks
+
+Build the fixtures and runner above, then use a local Linux Docker Engine with
+Compose and permission to access its daemon. The proxies use host networking;
+the fixture and proxy listeners bind random loopback ports. Docker Desktop,
+remote Docker daemons, macOS and Windows are not covered by this setup.
+
+```sh
+java -jar conformance/out/runner.jar --suite proxy \
+  --server 'java -jar .deder/out/fixture-jvm/assembly/out.jar' \
+  --output conformance/out/proxy-jvm
+
+java -jar conformance/out/runner.jar --suite proxy \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/proxy-native
+```
+
+Each invocation runs 13 raw HTTP/1.1 cases directly, through Caddy 2.10.2, and
+through nginx 1.28.0 with request buffering enabled and disabled. Image digests,
+Compose and configuration templates are in `proxy/`. Images are pulled if
+missing. Generated configurations, image identities, request/response bytes,
+proxy/fixture logs and `run.json` stay in the chosen output directory. Each run
+owns a unique Compose project, removes its containers/volumes on completion or
+TERM, and stops the fixture through its stop file on normal completion.
+
+The cases cover fixed/chunked bodies containing request-shaped bytes, both
+CL/TE orders, equal/conflicting/list/signed lengths, whitespace before a header
+colon, malformed chunks, bare LF and folded fields. Staged chunk delivery also
+exercises forwarding before a malformed body finishes. Valid controls must
+succeed. Other cases may reject or normalize to the exact expected body; their
+observed statuses remain in the report. Errors must close the client connection.
+The fixture records handler entry and completed body reads separately, including
+method, target, body and peer port. Unexpected handler entries, bodies or marker
+responses fail the run. Every case checks a fresh client's recovery response;
+forwarded sequences must reuse the same backend socket through each proxy.
+
+These are bounded deployment checks for these image/configuration combinations,
+not exhaustive request-smuggling coverage. Frontend HTTP/2 and TLS are excluded.
+Proxy normalization or rejection does not establish direct-server acceptance.
+
 # Run seeded fuzzing
 
 After building the fixtures and runner above, run the same seed on each target.
@@ -250,6 +290,20 @@ Native 0.5.12 release-fast with multithreading:
 | Seeded fuzzing (48 families; seeds 1 and 8675309) | 2000/2000 | 2000/2000 |
 | Sustained mixed traffic (60 seconds per capacity, 16 pressure + 4 legitimate clients) | 2/2 | 2/2 |
 | Nmap `http-slowloris-check` (10-/15-second head deadlines) | 2 explicit negatives | 2 explicit negatives |
+| Proxy boundaries (13 cases × direct/Caddy/nginx buffered/nginx streaming) | 52/52 | 52/52 |
+
+The proxy baseline used local changes based on `c2cd69f`, with the image digests
+and configurations in `proxy/`. Both targets produced the same outcomes:
+Caddy forwarded CL+TE and equal duplicate lengths with the exact decoded body;
+nginx rejected them. Both proxies normalized bare LF; Caddy also normalized the
+folded-field case. Direct potateh rejected these inputs. Invalid chunks produced
+400 directly/through nginx and 502 through Caddy; Caddy and staged nginx streaming
+could enter the backend handler before rejecting the incomplete body. No decoy
+became a request, all follow-up markers/recovery responses matched, and proxy
+backend reuse was verified. Normal shutdown completed for every fixture.
+An injected proxy method rewrite failed the exact-response assertion and exited
+nonzero; a TERM check removed the owned containers and stopped the active fixture.
+Reports are under ignored `conformance/out/proxy-{jvm,native}-verified`.
 
 Nmap 7.94SVN reported `NOT VULNERABLE` for both head deadlines on both targets;
 its debug timing differences rounded to zero. A temporary control server that
