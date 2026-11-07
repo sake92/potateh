@@ -1,0 +1,658 @@
+package ba.sake.potateh
+
+import java.io.{ByteArrayOutputStream, IOException, InputStream, OutputStream}
+import java.net.{
+  InetSocketAddress,
+  Socket,
+  SocketException,
+  SocketTimeoutException
+}
+import java.nio.charset.StandardCharsets.ISO_8859_1
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import scala.concurrent.duration.*
+
+/** Real-wire adaptations of upstream HttpServerTest/HttpServerContractTest. */
+class ServerTest extends munit.FunSuite {
+  override val munitTimeout = 60.seconds
+  private val config = ServerConfig(
+    bindAddress = new InetSocketAddress("127.0.0.1", 0),
+    timeouts = HttpTimeouts(
+      idle = 500.millis,
+      head = 500.millis,
+      bodyRead = 500.millis,
+      write = 500.millis,
+      shutdownGrace = 1.second
+    )
+  )
+  private def response(text: String): Response =
+    Response(body = ResponseBody.bytes(text.getBytes(ISO_8859_1)))
+  private def withServer[A](
+      settings: ServerConfig = config
+  )(handle: Request => Response)(test: Server => A): A = {
+    val server = Server.start(settings)(handle)
+    try test(server)
+    finally server.stop()
+  }
+  private def withSocket[A](server: Server)(test: Socket => A): A = {
+    val socket = new Socket()
+    try {
+      socket.connect(server.address, 1000); socket.setSoTimeout(3000);
+      test(socket)
+    } finally socket.close()
+  }
+  private def send(socket: Socket, wire: String): Unit = {
+    socket.getOutputStream.write(wire.getBytes(ISO_8859_1));
+    socket.getOutputStream.flush()
+  }
+  private def line(input: InputStream): String = {
+    val out = new StringBuilder
+    var byte = input.read()
+    while (byte != '\r') {
+      if (byte == -1 || byte == '\n')
+        throw new IOException("Truncated or malformed response")
+      out.append(byte.toChar)
+      byte = input.read()
+    }
+    if (input.read() != '\n') throw new IOException("Bad CRLF")
+    out.toString
+  }
+  private case class Received(status: Int, headers: Headers, body: String)
+  private def receive(socket: Socket, headOnly: Boolean = false): Received = {
+    val input = socket.getInputStream
+    val status = line(input).split(" ")(1).toInt
+    val fields = Vector.newBuilder[(String, String)]
+    var field = line(input)
+    while (field.nonEmpty) {
+      val colon = field.indexOf(':')
+      fields += field.take(colon) -> field.drop(colon + 1).trim
+      field = line(input)
+    }
+    val headers = Headers.from(fields.result())
+    val out = new ByteArrayOutputStream
+    def fixed(size: Int): Unit = (0 until size).foreach { _ =>
+      val byte = input.read();
+      if (byte == -1) throw new IOException("Truncated payload");
+      out.write(byte)
+    }
+    if (!headOnly && status >= 200 && !Set(204, 205, 304).contains(status)) {
+      if (headers.first("Transfer-Encoding").contains("chunked")) {
+        var size = Integer.parseInt(line(input), 16)
+        while (size > 0) {
+          fixed(size); assertEquals(line(input), "");
+          size = Integer.parseInt(line(input), 16)
+        }
+        assertEquals(line(input), "")
+      } else
+        headers.first("Content-Length") match {
+          case Some(size) => fixed(size.toInt)
+          case None       =>
+            var byte = input.read()
+            while (byte != -1) { out.write(byte); byte = input.read() }
+        }
+    }
+    Received(status, headers, new String(out.toByteArray, ISO_8859_1))
+  }
+  private def get(
+      target: String = "/",
+      version: String = "HTTP/1.1",
+      fields: String = ""
+  ): String =
+    s"GET $target $version\r\nHost: localhost\r\n$fields\r\n"
+  private def closed(socket: Socket): Unit = {
+    val actual = try socket.getInputStream.read()
+    catch { case _: SocketException => -1 }
+    assertEquals(actual, -1)
+  }
+  private def await(latch: CountDownLatch): Unit = {
+    val completed = latch.await(3, TimeUnit.SECONDS); assert(completed)
+  }
+
+  test(
+    "raw targets, duplicate headers and socket metadata reach the callback unchanged"
+  ) {
+    withServer() { request =>
+      assertEquals(request.headers.all("X-Value"), Vector("a", "b"))
+      assert(
+        request.localAddress.getPort > 0 && request.remoteAddress.getPort > 0
+      )
+      response(request.method + " " + request.target)
+    } { server =>
+      for (
+        (method, target) <- List(
+          "GET" -> "/a%2Fb/../c?q=%2f+X",
+          "GET" -> "//double/path",
+          "GET" -> "http://example.org/a%2F",
+          "OPTIONS" -> "*"
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(
+            socket,
+            s"$method $target HTTP/1.1\r\nHost: x\r\nX-Value: a\r\nx-value: b\r\nConnection: close\r\n\r\n"
+          )
+          assertEquals(receive(socket).body, s"$method $target")
+          closed(socket)
+        }
+      }
+    }
+  }
+  test(
+    "persistent mixed framing pipelines execute in wire order and close tokens win"
+  ) {
+    val calls = new AtomicInteger
+    withServer() { request =>
+      request.body.transferTo(new ByteArrayOutputStream)
+      val n = calls.incrementAndGet()
+      if (n == 2)
+        Response(body =
+          ResponseBody.Writer()(out => out.write("two".getBytes(ISO_8859_1)))
+        )
+      else response(n.toString)
+    } { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\n\r\nabc" +
+            "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n0\r\n\r\n" + get(
+              fields = "Connection: keep-alive, ClOsE\r\n"
+            )
+        )
+        assertEquals(receive(socket).body, "1")
+        assertEquals(receive(socket).body, "two")
+        assertEquals(receive(socket).body, "3")
+        closed(socket)
+        assertEquals(calls.get(), 3)
+      }
+    }
+  }
+  test(
+    "HTTP10 persistence is explicit and unknown lengths are close delimited"
+  ) {
+    withServer()(_ => response("ok")) { server =>
+      withSocket(server) { socket =>
+        send(socket, get(version = "HTTP/1.0"));
+        assertEquals(receive(socket).body, "ok"); closed(socket)
+      }
+      withSocket(server) { socket =>
+        send(
+          socket,
+          get(
+            version = "HTTP/1.0",
+            fields = "Connection: keep-alive\r\n"
+          ) + get(version = "HTTP/1.0")
+        )
+        assertEquals(
+          receive(socket).headers.first("Connection"),
+          Some("keep-alive")
+        )
+        assertEquals(receive(socket).body, "ok"); closed(socket)
+      }
+    }
+    withServer()(_ =>
+      Response(body = ResponseBody.Writer()(out => out.write('x')))
+    ) { server =>
+      withSocket(server) { socket =>
+        send(socket, get(version = "HTTP/1.0")); val actual = receive(socket)
+        assertEquals(actual.body, "x");
+        assertEquals(actual.headers.first("Transfer-Encoding"), None)
+      }
+    }
+  }
+  test("lazy continuation and trailers remain separate from initial headers") {
+    val entered = new CountDownLatch(1)
+    val read = new CountDownLatch(1)
+    withServer() { request =>
+      entered.countDown(); await(read)
+      assertEquals(request.body.trailers, None)
+      val out = new ByteArrayOutputStream
+      request.body.transferTo(out)
+      assertEquals(request.headers.all("X-End"), Vector.empty)
+      assertEquals(
+        request.body.trailers.map(_.all("X-End")),
+        Some(Vector("one", "two"))
+      )
+      response(new String(out.toByteArray, ISO_8859_1))
+    } { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          "POST / HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nTransfer-Encoding: chunked\r\n\r\n"
+        )
+        await(entered); socket.setSoTimeout(100)
+        intercept[SocketTimeoutException](socket.getInputStream.read())
+        read.countDown(); socket.setSoTimeout(3000)
+        assertEquals(receive(socket).status, 100)
+        send(socket, "3\r\nabc\r\n0\r\nX-End: one\r\nx-end: two\r\n\r\n")
+        assertEquals(receive(socket).body, "abc")
+      }
+    }
+  }
+  test(
+    "oversized declared bodies and unsupported expectations skip dispatch and continuation"
+  ) {
+    val calls = new AtomicInteger
+    withServer(config.copy(limits = HttpLimits(bodyBytes = Some(3))))(_ => {
+      calls.incrementAndGet(); response("bad")
+    }) { server =>
+      for (
+        (fields, code) <- List(
+          "Content-Length: 4\r\nExpect: 100-continue\r\n" -> 413,
+          "Expect: fancy\r\n" -> 417
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(socket, "POST / HTTP/1.1\r\nHost: x\r\n" + fields + "\r\n");
+          assertEquals(receive(socket).status, code); closed(socket)
+        }
+      }
+      assertEquals(calls.get(), 0)
+    }
+  }
+  test(
+    "caught chunk body errors remain terminal for single bulk and skip consumption"
+  ) {
+    for (mode <- List("single", "bulk", "skip")) {
+      val calls = new AtomicInteger
+      withServer(config.copy(limits = HttpLimits(bodyBytes = Some(3)))) {
+        request =>
+          calls.incrementAndGet()
+          try
+            mode match {
+              case "single" => while (request.body.read() != -1) ()
+              case "bulk" => request.body.transferTo(new ByteArrayOutputStream)
+              case _      => request.body.skip(100)
+            }
+          catch { case _: IOException => () }
+          response("wrong")
+      } { server =>
+        withSocket(server) { socket =>
+          send(
+            socket,
+            "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nab\r\n2\r\ncd\r\n0\r\n\r\n" + get()
+          )
+          assertEquals(receive(socket).status, 413); closed(socket);
+          assertEquals(calls.get(), 1)
+        }
+      }
+    }
+  }
+  test(
+    "streaming response writers can consume requests and streams expire with the exchange"
+  ) {
+    val escaped = new AtomicReference[RequestBody]
+    val ended = new CountDownLatch(1)
+    withServer() { request =>
+      escaped.set(request.body)
+      Response(body = ResponseBody.Writer() { out =>
+        try request.body.transferTo(out)
+        finally ended.countDown()
+      })
+    } { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\n\r\nabc"
+        )
+        assertEquals(receive(socket).body, "abc"); await(ended)
+        // A subsequent exchange establishes that prior exchange cleanup has finished.
+        send(socket, get(fields = "Connection: close\r\n"));
+        assertEquals(receive(socket).status, 200); closed(socket)
+        intercept[IOException](escaped.get().read())
+      }
+    }
+  }
+  test(
+    "unread request bodies close without draining or parsing pipelined bytes"
+  ) {
+    val calls = new AtomicInteger
+    withServer()(_ => { calls.incrementAndGet(); response("ok") }) { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 999\r\n\r\n" + get()
+        )
+        assertEquals(receive(socket).body, "ok"); closed(socket);
+        assertEquals(calls.get(), 1)
+      }
+    }
+  }
+  test(
+    "malformed heads, upgrades and tunnels are rejected and server recovers"
+  ) {
+    withServer()(_ => response("ok")) { server =>
+      for (
+        (wire, code) <- List(
+          "GET / HTTP/1.1\r\n\r\n" -> 400,
+          get(fields =
+            "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n"
+          ) -> 400,
+          "GET / HTTP/1.1\nHost: x\r\n\r\n" -> 400,
+          get(fields = "Upgrade: websocket\r\nConnection: upgrade\r\n") -> 501,
+          "CONNECT example.org:443 HTTP/1.1\r\nHost: x\r\n\r\n" -> 501
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(socket, wire); assertEquals(receive(socket).status, code);
+          closed(socket)
+        }
+      }
+      withSocket(server) { socket =>
+        send(socket, get()); assertEquals(receive(socket).body, "ok")
+      }
+    }
+  }
+
+  test("HEAD and bodyless status writers are never invoked over real sockets") {
+    val invoked = new AtomicInteger
+    withServer() { request =>
+      val status =
+        if (request.target == "/") 200 else request.target.drop(1).toInt
+      Response(
+        status,
+        body = ResponseBody.Writer(Some(3))(_ => {
+          invoked.incrementAndGet(); ()
+        })
+      )
+    } { server =>
+      for (
+        (method, target, code) <- List(
+          ("HEAD", "/", 200),
+          ("GET", "/204", 204),
+          ("GET", "/205", 205),
+          ("GET", "/304", 304)
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(
+            socket,
+            s"$method $target HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+          )
+          assertEquals(receive(socket, headOnly = true).status, code);
+          closed(socket)
+        }
+      }
+      assertEquals(invoked.get(), 0)
+    }
+  }
+  test(
+    "callback failures and invalid response framing produce 500 before commitment"
+  ) {
+    withServer() { request =>
+      if (request.target == "/throw")
+        throw new IllegalStateException("callback")
+      Response(headers = Headers("Content-Length" -> "999"))
+    } { server =>
+      for (target <- List("/throw", "/conflict")) withSocket(server) { socket =>
+        send(socket, get(target)); assertEquals(receive(socket).status, 500);
+        closed(socket)
+      }
+    }
+  }
+  test(
+    "response failures after commitment abort without a second response or connection reuse"
+  ) {
+    for (mode <- List("underflow", "overflow", "throw", "body-failure")) {
+      val calls = new AtomicInteger
+      withServer(config.copy(limits = HttpLimits(bodyBytes = Some(1)))) {
+        request =>
+          calls.incrementAndGet()
+          Response(body = ResponseBody.Writer(Some(2)) { out =>
+            out.write('x'); out.flush()
+            mode match {
+              case "underflow" => ()
+              case "overflow"  =>
+                try out.write(Array[Byte](1, 2))
+                catch { case _: IOException => () }
+              case "throw" => throw new IllegalStateException("writer")
+              case _       =>
+                try request.body.transferTo(out)
+                catch { case _: IOException => () }
+            }
+          })
+      } { server =>
+        withSocket(server) { socket =>
+          send(
+            socket,
+            "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nab\r\n0\r\n\r\n" + get()
+          )
+          val raw = new ByteArrayOutputStream
+          try socket.getInputStream.transferTo(raw)
+          catch { case _: SocketException => () }
+          val wire = new String(raw.toByteArray, ISO_8859_1)
+          assert(wire.startsWith("HTTP/1.1 200 "))
+          assertEquals(wire.sliding(5).count(_ == "HTTP/"), 1)
+          assertEquals(calls.get(), 1)
+        }
+      }
+    }
+  }
+  test(
+    "stalled fixed bodies, chunk data and trailers time out and release admission"
+  ) {
+    for (
+      (fields, payload) <- List(
+        "Content-Length: 1\r\n" -> "",
+        "Transfer-Encoding: chunked\r\n" -> "1\r\n",
+        "Transfer-Encoding: chunked\r\n" -> "0\r\nX-Slow: "
+      )
+    ) {
+      withServer(config.copy(maxConnections = 1)) { request =>
+        request.body.transferTo(new ByteArrayOutputStream); response("ok")
+      } { server =>
+        withSocket(server) { socket =>
+          send(
+            socket,
+            "POST / HTTP/1.1\r\nHost: x\r\n" + fields + "\r\n" + payload
+          )
+          assertEquals(receive(socket).status, 408); closed(socket)
+        }
+        eventually() {
+          withSocket(server) { socket =>
+            send(socket, get()); assertEquals(receive(socket).body, "ok")
+          }
+        }
+      }
+    }
+  }
+  test(
+    "initial and subsequent heads have absolute deadlines despite byte trickling"
+  ) {
+    for (subsequent <- List(false, true)) withServer()(_ => response("ok")) {
+      server =>
+        withSocket(server) { socket =>
+          if (subsequent) {
+            send(socket, get()); assertEquals(receive(socket).body, "ok")
+          }
+          send(socket, "G")
+          Thread.sleep(150); send(socket, "E")
+          Thread.sleep(150); send(socket, "T")
+          Thread.sleep(250)
+          assertEquals(receive(socket).status, 408); closed(socket)
+        }
+    }
+  }
+  test(
+    "complete slow heads within deadline succeed and handler think time is excluded"
+  ) {
+    withServer()(_ => { Thread.sleep(600); response("ok") }) { server =>
+      withSocket(server) { socket =>
+        send(socket, "GET / HTTP/1.1\r\nHost:"); Thread.sleep(100);
+        send(socket, " x\r\n\r\n")
+        assertEquals(receive(socket).body, "ok")
+        send(socket, get()); assertEquals(receive(socket).body, "ok")
+      }
+    }
+  }
+  test("silent and idle persistent connections close and release admission") {
+    withServer(config.copy(maxConnections = 1))(_ => response("ok")) { server =>
+      withSocket(server)(closed)
+      eventually() {
+        withSocket(server) { socket =>
+          send(socket, get()); assertEquals(receive(socket).body, "ok");
+          closed(socket)
+        }
+      }
+    }
+  }
+  test(
+    "active connections consume admission; rejection and disconnect recover"
+  ) {
+    val entered = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    withServer(config.copy(maxConnections = 1)) { request =>
+      if (request.target == "/hold") { entered.countDown(); await(release) }
+      response("ok")
+    } { server =>
+      try
+        withSocket(server) { first =>
+          send(first, get("/hold")); await(entered)
+          withSocket(server)(closed)
+          release.countDown(); assertEquals(receive(first).body, "ok")
+        }
+      finally release.countDown()
+      eventually() {
+        withSocket(server) { socket =>
+          send(socket, get()); assertEquals(receive(socket).body, "ok")
+        }
+      }
+    }
+  }
+  test("streaming can outlast per-I/O timeouts while making progress") {
+    withServer() { request =>
+      Response(body = ResponseBody.Writer(Some(3)) { out =>
+        var i = 0
+        while (i < 3) { out.write(request.body.read()); out.flush(); i += 1 }
+      })
+    } { server =>
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\n\r\na")
+        Thread.sleep(300); send(socket, "b"); Thread.sleep(300);
+        send(socket, "c")
+        assertEquals(receive(socket).body, "abc")
+      }
+    }
+  }
+  test("blocked socket writes expire and the server recovers") {
+    val started = new CountDownLatch(1)
+    val finished = new CountDownLatch(1)
+    withServer(config.copy(maxConnections = 1)) { request =>
+      if (request.target != "/large") response("ok")
+      else
+        Response(body = ResponseBody.Writer() { out =>
+          started.countDown()
+          try {
+            val block = new Array[Byte](65536);
+            (0 until 4096).foreach(_ => out.write(block))
+          } finally finished.countDown()
+        })
+    } { server =>
+      withSocket(server) { socket =>
+        socket.setReceiveBufferSize(1024); send(socket, get("/large"));
+        await(started); await(finished)
+      }
+      eventually() {
+        withSocket(server) { socket =>
+          send(socket, get()); assertEquals(receive(socket).body, "ok")
+        }
+      }
+    }
+  }
+  test(
+    "stop waits for an active response within grace and suppresses the next pipelined request"
+  ) {
+    val entered = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    val calls = new AtomicInteger
+    val server = Server.start(config) { _ =>
+      calls.incrementAndGet(); entered.countDown(); await(release);
+      response("ok")
+    }
+    try
+      withSocket(server) { socket =>
+        send(socket, get() + get()); await(entered)
+        val stopped = new CountDownLatch(1)
+        val stop = new Thread(() => { server.stop(); stopped.countDown() })
+        stop.start()
+        val done = stopped.await(100, TimeUnit.MILLISECONDS)
+        assert(!done)
+        release.countDown()
+        assertEquals(receive(socket).body, "ok"); closed(socket)
+        await(stopped); stop.join(1000); assert(!stop.isAlive);
+        assertEquals(calls.get(), 1)
+      }
+    finally { release.countDown(); server.stop() }
+  }
+  test(
+    "forced shutdown unblocks body reads within one grace budget and concurrent stop is idempotent"
+  ) {
+    val entered = new CountDownLatch(1)
+    val ended = new CountDownLatch(1)
+    val settings = config.copy(timeouts =
+      config.timeouts.copy(bodyRead = 10.seconds, shutdownGrace = 200.millis)
+    )
+    val server = Server.start(settings) { request =>
+      entered.countDown();
+      try request.body.read()
+      finally ended.countDown();
+      response("ok")
+    }
+    try
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\n\r\n");
+        await(entered)
+        val start = System.nanoTime()
+        val stoppers = Vector.fill(4)(new Thread(() => server.stop()))
+        stoppers.foreach(_.start()); stoppers.foreach(_.join(2000))
+        assert(stoppers.forall(!_.isAlive));
+        assert((System.nanoTime() - start).nanos < 1500.millis)
+        await(ended); closed(socket); server.stop()
+      }
+    finally server.stop()
+  }
+  test(
+    "callback stop and callback stop racing an external stop do not self-join"
+  ) {
+    for (external <- List(false, true)) {
+      val entered = new CountDownLatch(1)
+      val proceed = new CountDownLatch(1)
+      val returned = new CountDownLatch(1)
+      val ref = new AtomicReference[Server]
+      val server = Server.start(config) { _ =>
+        entered.countDown(); await(proceed); ref.get().stop();
+        returned.countDown(); response("ok")
+      }
+      ref.set(server)
+      try
+        withSocket(server) { socket =>
+          send(socket, get()); await(entered)
+          val stopper = new Thread(() => server.stop())
+          if (external) { stopper.start(); Thread.sleep(50) }
+          proceed.countDown(); await(returned)
+          if (external) { stopper.join(2000); assert(!stopper.isAlive) }
+          if (external) assertEquals(receive(socket).body, "ok")
+          closed(socket)
+        }
+      finally { proceed.countDown(); server.stop() }
+    }
+  }
+  test("stop closes idle sockets and releases the bound port") {
+    val server = Server.start(config)(_ => response("ok"))
+    val address = server.address
+    try withSocket(server) { socket => server.stop(); closed(socket) }
+    finally server.stop()
+    val rebound =
+      Server.start(config.copy(bindAddress = address))(_ => response("new"))
+    rebound.stop()
+  }
+  private def eventually()(assertion: => Unit): Unit = {
+    val deadline = System.nanoTime() + 2.seconds.toNanos
+    var done = false
+    while (!done) {
+      try { assertion; done = true }
+      catch {
+        case _: IOException if System.nanoTime() < deadline => Thread.sleep(10)
+      }
+    }
+  }
+}

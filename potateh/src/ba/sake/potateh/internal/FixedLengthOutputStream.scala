@@ -2,14 +2,16 @@ package ba.sake.potateh.internal
 
 import java.io.{IOException, OutputStream}
 
-/** Writes an exact response body to a caller-owned connection stream.
-  * Length zero also serves as strict no-body output: nonempty writes fail,
-  * and close emits no payload or framing bytes.
-  * Successful close flushes the sink without closing it. A failure requires
-  * the connection owner to abort the exchange and close the connection.
+/** Writes an exact response body to a caller-owned connection stream. Length
+  * zero also serves as strict no-body output: nonempty writes fail, and close
+  * emits no payload or framing bytes. Successful close flushes the sink without
+  * closing it. A failure requires the connection owner to abort the exchange
+  * and close the connection.
   */
-private[potateh] final class FixedLengthOutputStream(private val output: OutputStream, length: Long)
-    extends OutputStream {
+private[potateh] final class FixedLengthOutputStream(
+    private val output: OutputStream,
+    length: Long
+) extends OutputStream {
   if (output == null) throw new NullPointerException("output")
   require(length >= 0, "Negative body length")
 
@@ -29,11 +31,14 @@ private[potateh] final class FixedLengthOutputStream(private val output: OutputS
 
   override def write(buffer: Array[Byte], offset: Int, length: Int): Unit = {
     if (buffer == null) throw new NullPointerException("buffer")
-    if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset)
+    if (
+      offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset
+    )
       throw new IndexOutOfBoundsException()
     checkWritable()
     if (length == 0) return
-    if (length.toLong > remaining) fail(new IOException("Too many response body bytes"))
+    if (length.toLong > remaining)
+      fail(new IOException("Too many response body bytes"))
     try output.write(buffer, offset, length)
     catch { case error: IOException => fail(error) }
     remaining -= length

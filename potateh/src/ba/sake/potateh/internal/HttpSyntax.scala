@@ -12,8 +12,13 @@ private[potateh] object HttpSyntax {
   def trimOws(value: String): String = {
     var start = 0
     var end = value.length
-    while (start < end && (value.charAt(start) == ' ' || value.charAt(start) == '\t')) start += 1
-    while (end > start && (value.charAt(end - 1) == ' ' || value.charAt(end - 1) == '\t')) end -= 1
+    while (
+      start < end && (value.charAt(start) == ' ' || value.charAt(start) == '\t')
+    ) start += 1
+    while (
+      end > start && (value
+        .charAt(end - 1) == ' ' || value.charAt(end - 1) == '\t')
+    ) end -= 1
     value.substring(start, end)
   }
 

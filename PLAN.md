@@ -115,3 +115,9 @@ The same core callback API serves HTTP on JVM/Java 21 and Scala Native; relevant
   framing/connection headers. Trailer fields are separate and body failures
   remain terminal. JVM and Native MUnit runs pass; Native linking required
   avoiding java.util.Locale (case-insensitive comparisons are shared).
+- Formatting adjustment: Scalafmt 3.11.1 rejects `preset = common`; use its
+  supported standard `default` preset.
+- Checkpoint 3: implemented synchronous bind, bounded platform-thread admission,
+  persistent sequential exchanges, lazy continuation, request stream lifetime,
+  write watchdog and terminal stop. Shared real-socket regressions pass on JVM
+  and Native, including forced/graceful/concurrent/callback stop and timeouts.

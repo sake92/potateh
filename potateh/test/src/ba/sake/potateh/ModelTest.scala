@@ -8,7 +8,10 @@ class ModelTest extends munit.FunSuite {
     val initial = Headers("X-One" -> "a", "x-one" -> "b", "Other" -> "c")
     assertEquals(initial.all("X-ONE"), Vector("a", "b"))
     assertEquals(initial.first("x-one"), Some("a"))
-    assertEquals(initial.set("x-ONE", "d").fields, Vector("Other" -> "c", "x-ONE" -> "d"))
+    assertEquals(
+      initial.set("x-ONE", "d").fields,
+      Vector("Other" -> "c", "x-ONE" -> "d")
+    )
     assertEquals(initial.remove("X-ONE").fields, Vector("Other" -> "c"))
     assertEquals(initial.fields.size, 3)
     intercept[IllegalArgumentException](Headers("x\r\nBad" -> "y"))

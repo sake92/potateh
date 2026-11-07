@@ -1,8 +1,13 @@
 package ba.sake.potateh.internal
 
-import java.io.{BufferedInputStream, ByteArrayInputStream, EOFException, IOException, InputStream}
+import java.io.{
+  BufferedInputStream,
+  ByteArrayInputStream,
+  EOFException,
+  IOException,
+  InputStream
+}
 import java.nio.charset.StandardCharsets.ISO_8859_1
-
 
 class FixedLengthInputStreamTest extends munit.FunSuite {
   test("readsExactlyTheDeclaredBody") {
@@ -12,7 +17,10 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
     assertEquals(body.read(), 255)
     val buffer = Array.fill[Byte](8)(42)
     assertEquals(body.read(buffer, 2, 6), 3)
-    assertEquals(buffer .toSeq, Array[Byte](42, 42, 97, 98, 99, 42, 42, 42) .toSeq)
+    assertEquals(
+      buffer.toSeq,
+      Array[Byte](42, 42, 97, 98, 99, 42, 42, 42).toSeq
+    )
     assert(body.isComplete)
     assertEquals(body.read(), -1)
     assertEquals(body.read(buffer), -1)
@@ -22,7 +30,9 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
 
   test("handlesFragmentedInput") {
     val payload = "abcdefghijklmnopqrstuvwxyz"
-    val source = new ByteArrayInputStream((payload + "GET / HTTP/1.0\r\n\r\n").getBytes(ISO_8859_1)) {
+    val source = new ByteArrayInputStream(
+      (payload + "GET / HTTP/1.0\r\n\r\n").getBytes(ISO_8859_1)
+    ) {
       override def read(b: Array[Byte], off: Int, len: Int): Int =
         super.read(b, off, math.min(len, 2))
     }
@@ -45,8 +55,10 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
 
   test("emptyBodiesAndZeroLengthReadsDoNotConsumeSource") {
     val source = new InputStream {
-      override def read(): Int = throw new AssertionError("Source must not be read")
-      override def available(): Int = throw new AssertionError("Source must not be probed")
+      override def read(): Int =
+        throw new AssertionError("Source must not be read")
+      override def available(): Int =
+        throw new AssertionError("Source must not be probed")
     }
     val empty = new FixedLengthInputStream(source, 0)
     assert(empty.isComplete)
@@ -65,15 +77,19 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
   test("rejectsInvalidArgumentsWithoutConsumingInput") {
     intercept[NullPointerException] { new FixedLengthInputStream(null, 1) }
     val source = stream("abcNEXT")
-    intercept[IllegalArgumentException] { new FixedLengthInputStream(source, -1) }
+    intercept[IllegalArgumentException] {
+      new FixedLengthInputStream(source, -1)
+    }
     val body = new FixedLengthInputStream(source, 3)
     val buffer = new Array[Byte](4)
     intercept[NullPointerException] { body.read(null) }
     intercept[NullPointerException] { body.read(null, 0, 0) }
-    List((-1, 1), (0, -1), (5, 0), (3, 2), (1, Int.MaxValue), (Int.MaxValue, 1)).foreach {
-      case (offset, length) =>
-        intercept[IndexOutOfBoundsException] { body.read(buffer, offset, length) }
-    }
+    List((-1, 1), (0, -1), (5, 0), (3, 2), (1, Int.MaxValue), (Int.MaxValue, 1))
+      .foreach { case (offset, length) =>
+        intercept[IndexOutOfBoundsException] {
+          body.read(buffer, offset, length)
+        }
+      }
     assertEquals(body.skip(3), 3L)
     assert(body.isComplete)
     assertEquals(source.read(), 'N'.toInt)
@@ -92,11 +108,13 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
   }
 
   test("skipIsBoundedAndHandlesShortReads") {
-    val source = new ByteArrayInputStream(("a" * 5000 + "zNEXT").getBytes(ISO_8859_1)) {
-      override def read(b: Array[Byte], off: Int, len: Int): Int =
-        super.read(b, off, math.min(len, 3))
-      override def skip(count: Long): Long = throw new AssertionError("Must verify skipped body bytes")
-    }
+    val source =
+      new ByteArrayInputStream(("a" * 5000 + "zNEXT").getBytes(ISO_8859_1)) {
+        override def read(b: Array[Byte], off: Int, len: Int): Int =
+          super.read(b, off, math.min(len, 3))
+        override def skip(count: Long): Long =
+          throw new AssertionError("Must verify skipped body bytes")
+      }
     val body = new FixedLengthInputStream(source, 5001)
     assertEquals(body.skip(Long.MinValue), 0L)
     assertEquals(body.skip(5000), 5000L)
@@ -134,14 +152,16 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
       val body = new FixedLengthInputStream(stream("ab"), 3)
       assertEquals(body.read(), 'a'.toInt)
       assertEquals(body.read(), 'b'.toInt)
-      val error = intercept[EOFException] { {
-        operation match {
-          case "single" => body.read()
-          case "bulk" => body.read(new Array[Byte](4))
-          case "skip" => body.skip(1)
+      val error = intercept[EOFException] {
+        {
+          operation match {
+            case "single" => body.read()
+            case "bulk"   => body.read(new Array[Byte](4))
+            case "skip"   => body.skip(1)
+          }
+          ()
         }
-        ()
-      } }
+      }
       assert(!(body.isComplete))
       assert(intercept[IOException] { body.read() } eq error)
       assert(intercept[IOException] { body.available() } eq error)
@@ -175,15 +195,17 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
       val body = new FixedLengthInputStream(source, 3)
       assertEquals(body.read(), 'a'.toInt)
       broken = true
-      assert(intercept[IOException] { {
-        operation match {
-          case "single" => body.read()
-          case "bulk" => body.read(new Array[Byte](4))
-          case "skip" => body.skip(1)
-          case "available" => body.available()
+      assert(intercept[IOException] {
+        {
+          operation match {
+            case "single"    => body.read()
+            case "bulk"      => body.read(new Array[Byte](4))
+            case "skip"      => body.skip(1)
+            case "available" => body.available()
+          }
+          ()
         }
-        ()
-      } } eq error)
+      } eq error)
       val callsAtFailure = calls
       broken = false
       assert(intercept[IOException] { body.read() } eq error)
@@ -212,7 +234,10 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
     intercept[IOException] { body.read(new Array[Byte](0)) }
     intercept[IOException] { body.skip(0) }
     intercept[IOException] { body.available() }
-    assertEquals(source.read(), 'b'.toInt) // Closing did not drain unread bytes.
+    assertEquals(
+      source.read(),
+      'b'.toInt
+    ) // Closing did not drain unread bytes.
     val complete = new FixedLengthInputStream(source, 1)
     assertEquals(complete.read(), 'c'.toInt)
     complete.close()

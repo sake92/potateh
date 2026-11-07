@@ -15,7 +15,9 @@ final case class HttpLimits(
     trailerCount: Int = 50,
     bodyBytes: Option[Long] = Some(8L * 1024 * 1024)
 ) {
-  require(requestLineBytes > 0 && headerLineBytes > 0 && chunkLineBytes > 0 && trailerLineBytes > 0)
+  require(
+    requestLineBytes > 0 && headerLineBytes > 0 && chunkLineBytes > 0 && trailerLineBytes > 0
+  )
   require(headerSectionBytes >= 2 && trailerSectionBytes >= 2)
   require(headerCount >= 0 && trailerCount >= 0 && chunkExtensionBytes >= 0)
   require(bodyBytes.forall(_ >= 0))
@@ -28,8 +30,14 @@ final case class HttpTimeouts(
     shutdownGrace: FiniteDuration = 5.seconds
 ) {
   private val io = List(idle, head, bodyRead, write)
-  require(io.forall(d => d.toNanos > 0 && d.toMillis <= Int.MaxValue), "I/O timeouts must fit socket milliseconds")
-  require(shutdownGrace.toNanos >= 0 && shutdownGrace.toDays <= 1, "Shutdown grace must be between zero and one day")
+  require(
+    io.forall(d => d.toNanos > 0 && d.toMillis <= Int.MaxValue),
+    "I/O timeouts must fit socket milliseconds"
+  )
+  require(
+    shutdownGrace.toNanos >= 0 && shutdownGrace <= 1.day,
+    "Shutdown grace must be between zero and one day"
+  )
 }
 final case class ServerConfig(
     bindAddress: InetSocketAddress = new InetSocketAddress("127.0.0.1", 8080),
