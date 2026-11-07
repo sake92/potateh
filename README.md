@@ -92,5 +92,5 @@ unblocks I/O but does not guarantee that every callback has returned. There is
 no automatic process shutdown hook; applications own when to stop the server.
 
 TLS, HTTP/2, upgrades/WebSockets, CONNECT tunnels, routing, authentication,
-cookies, forms, JSON and compression are outside this core. See [PLAN.md](PLAN.md)
-for progress and [TODO.md](TODO.md) for subsequent work.
+cookies, forms, JSON and compression are outside this core. See
+[TODO.md](TODO.md) for planned improvements.

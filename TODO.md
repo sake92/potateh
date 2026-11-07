@@ -1,6 +1,6 @@
 # Planned improvements
 
-The initial implementation is tracked in [PLAN.md](PLAN.md). This backlog covers subsequent work. Unchecked items are outstanding work, not implemented protections or confirmed vulnerabilities. Source-server results do not establish potateh behavior.
+Unchecked items are outstanding work, not implemented protections or confirmed vulnerabilities. Source-server results do not establish potateh behavior.
 
 ## Hardening validation
 
