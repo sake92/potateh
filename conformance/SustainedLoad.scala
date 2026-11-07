@@ -414,7 +414,7 @@ object SustainedLoad {
     def response(expected: String, slow: Boolean = false): Unit = {
       val status = line().split(" ", 3)
       require(status.length == 3 && status(0) == "HTTP/1.1" && status(1) == "200", "Unexpected response status")
-      val fields = Vector.newBuilder[(String, String)]
+      val fields = Vector.newBuilder[(name: String, value: String)]
       var field = line()
       var count = 0
       while (field.nonEmpty) {

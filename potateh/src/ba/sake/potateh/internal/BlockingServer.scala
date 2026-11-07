@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import ba.sake.potateh.*
 import java.io.{BufferedInputStream, BufferedOutputStream, IOException, InputStream, PushbackInputStream}
 import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
@@ -25,7 +26,10 @@ private[potateh] final class BlockingServer(
     override def run(): Unit = {
       val admitted = withLifecycle {
         if (state != State.Running || !connections.contains(this)) false
-        else { thread = Some(Thread.currentThread()); true }
+        else {
+          thread = Some(Thread.currentThread())
+          true
+        }
       }
       if (admitted) {
         try serve(this)
@@ -48,10 +52,10 @@ private[potateh] final class BlockingServer(
   private var stopOwner: Option[Thread] = None
   private val connections = mutable.Set.empty[Connection]
   private val (executor, ownedExecutor) = suppliedExecutor match {
-    case Some(value) => (value, None)
+    case Some(value) => (executor = value, ownedExecutor = None)
     case None        =>
       val pool = Executors.newCachedThreadPool(task => new Thread(task, "potateh-connection"))
-      (pool: Executor, Some(pool))
+      (executor = pool: Executor, ownedExecutor = Some(pool))
   }
   private val writes = new WriteTimeouts(config.timeouts.write.toNanos)
   private val acceptThread = new Thread(() => accept(), "potateh-accept")
@@ -63,25 +67,33 @@ private[potateh] final class BlockingServer(
     try {
       writes.thread.start()
       acceptThread.start()
-    } catch { case error: Throwable => stop(); throw error }
+    } catch {
+      case error: Throwable =>
+        stop()
+        throw error
+    }
   }
 
-  def stop(): Unit = {
+  def stop(): Unit = boundary {
     val self = Thread.currentThread()
     var interrupted = Thread.interrupted()
     val (deadline, fromConnection) = withLifecycle {
-      if (state == State.Stopped) { if (interrupted) self.interrupt(); return }
+      if (state == State.Stopped) {
+        if (interrupted) self.interrupt()
+        break()
+      }
       if (state == State.Stopping) {
         // A worker must return to let an existing stop caller finish its exchange.
         if (connections.exists(_.thread.contains(self)) || stopOwner.contains(self)) {
-          if (interrupted) self.interrupt(); return
+          if (interrupted) self.interrupt()
+          break()
         }
         while (state != State.Stopped) {
           try lifecycleChanged.await()
           catch { case _: InterruptedException => interrupted = true }
         }
         if (interrupted) self.interrupt()
-        return
+        break()
       }
       state = State.Stopping
       stopOwner = Some(self)
@@ -91,8 +103,8 @@ private[potateh] final class BlockingServer(
       connections.filterInPlace(_.thread.nonEmpty)
       lifecycleChanged.signalAll()
       (
-        System.nanoTime() + config.timeouts.shutdownGrace.toNanos,
-        connections.exists(_.thread.contains(self))
+        deadline = System.nanoTime() + config.timeouts.shutdownGrace.toNanos,
+        fromConnection = connections.exists(_.thread.contains(self))
       )
     }
     try {
@@ -135,7 +147,9 @@ private[potateh] final class BlockingServer(
       }
     } finally {
       withLifecycle {
-        state = State.Stopped; stopOwner = None; lifecycleChanged.signalAll()
+        state = State.Stopped
+        stopOwner = None
+        lifecycleChanged.signalAll()
       }
       if (interrupted) self.interrupt()
     }
@@ -182,10 +196,13 @@ private[potateh] final class BlockingServer(
     } catch {
       case _: IOException if !running => ()
       case NonFatal(_)                => stop()
-    } finally { closeListener(); if (running) stop() }
+    } finally {
+      closeListener()
+      if (running) stop()
+    }
   }
 
-  private def serve(connection: Connection): Unit = {
+  private def serve(connection: Connection): Unit = boundary {
     val socket = connection.socket
     try {
       socket.setTcpNoDelay(true)
@@ -204,7 +221,7 @@ private[potateh] final class BlockingServer(
           socket.setSoTimeout(millis(config.timeouts.head.toNanos).toInt)
         }
         val next = input.read()
-        if (next == -1) return
+        if (next == -1) break()
         input.unread(next)
         val deadline = {
           if (first) headStart + config.timeouts.head.toNanos
@@ -238,22 +255,29 @@ private[potateh] final class BlockingServer(
           )
         } catch {
           case error: RequestHeadParser.ParseException =>
-            reject(socket, output, error.responseCode); return
-          case _: SocketTimeoutException => reject(socket, output, 408); return
+            reject(socket, output, error.responseCode)
+            break()
+          case _: SocketTimeoutException =>
+            reject(socket, output, 408)
+            break()
         }
         head match {
-          case None        => return
+          case None        => break()
           case Some(value) =>
             val admitted = withLifecycle {
               if (state != State.Running) false
-              else { connection.active = true; true }
+              else {
+                connection.active = true
+                true
+              }
             }
-            if (!admitted) return
+            if (!admitted) break()
             try {
               reuse = new Exchange(socket, input, output, value, config, handle).run()
             } finally {
               withLifecycle {
-                connection.active = false; lifecycleChanged.signalAll()
+                connection.active = false
+                lifecycleChanged.signalAll()
               }
             }
         }

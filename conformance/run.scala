@@ -14,6 +14,7 @@ import mainargs.{arg, main, ParserForMethods}
 import org.apache.tools.ant.types.Commandline
 import scala.collection.mutable
 import scala.util.control.NonFatal
+import scala.util.boundary, boundary.break
 
 object ConformanceRunner {
   private val pins = Map(
@@ -332,13 +333,13 @@ object ConformanceRunner {
     }
   }
 
-  def awaitPort(process: Process, log: Path): String = {
+  def awaitPort(process: Process, log: Path): String = boundary {
     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
     val listening = "(?m)^LISTENING (\\d+)$".r
     while (System.nanoTime() < deadline) {
       require(process.isAlive, s"Server exited before readiness; see $log")
       listening.findFirstMatchIn(Files.readString(log)) match {
-        case Some(found) => return found.group(1)
+        case Some(found) => break(found.group(1))
         case None        => Thread.sleep(50)
       }
     }
@@ -414,8 +415,8 @@ object ConformanceRunner {
       }
     }
 
-    private def stopOwned(process: Process): Unit = {
-      if (!withLock(lock)(owned.contains(process))) return
+    private def stopOwned(process: Process): Unit = boundary {
+      if (!withLock(lock)(owned.contains(process))) break()
       var interrupted = Thread.interrupted()
       def waitBounded(child: Process, milliseconds: Long): Boolean = {
         val deadline = {

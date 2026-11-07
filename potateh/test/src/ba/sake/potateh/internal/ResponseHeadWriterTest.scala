@@ -129,7 +129,8 @@ class ResponseHeadWriterTest extends munit.FunSuite {
     var escaped: Option[OutputStream] = None
     val sink = new ByteArrayOutputStream()
     val body = ResponseBody.Writer(Some(2)) { out =>
-      escaped = Some(out); out.write(Array[Byte](1, 2))
+      escaped = Some(out)
+      out.write(Array[Byte](1, 2))
     }
     writeBody(sink, body, FixedLength(2))
     escaped.foreach(out => intercept[IOException](out.write(3)))

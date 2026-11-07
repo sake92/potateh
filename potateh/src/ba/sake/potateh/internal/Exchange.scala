@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import ba.sake.potateh.*
 import java.io.{IOException, InputStream, OutputStream}
 import java.net.{Socket, SocketTimeoutException}
@@ -57,13 +58,23 @@ private[potateh] final class Exchange(
       if (offset < 0 || length < 0 || offset > bytes.length || length > bytes.length - offset) {
         throw new IndexOutOfBoundsException()
       }
-      if (length == 0) { check(); 0 }
-      else consume(framed.read(bytes, offset, length))
+      if (length == 0) {
+        check()
+        0
+      } else consume(framed.read(bytes, offset, length))
     }
-    override def skip(count: Long): Long = if (count <= 0) { check(); 0L }
-    else consume(framed.skip(count))
-    override def available(): Int = { check(); guard(framed.available()) }
-    override def close(): Unit = { closed = true; framed.close() }
+    override def skip(count: Long): Long = if (count <= 0) {
+      check()
+      0L
+    } else consume(framed.skip(count))
+    override def available(): Int = {
+      check()
+      guard(framed.available())
+    }
+    override def close(): Unit = {
+      closed = true
+      framed.close()
+    }
     private def checkLifetime(): Unit = {
       if (!live) throw new IOException("Request body escaped its exchange")
     }
@@ -108,15 +119,17 @@ private[potateh] final class Exchange(
     }
   }
 
-  def run(): Boolean = {
+  def run(): Boolean = boundary {
     try {
       head.framing match {
         case RequestHeadParser.FixedLength(size) if limits.bodyBytes.exists(size > _) =>
-          reject(413); return false
+          reject(413)
+          break(false)
         case _ => ()
       }
       if (head.method == "CONNECT" || headers.first("Upgrade").nonEmpty) {
-        reject(501); return false
+        reject(501)
+        break(false)
       }
       val expectations = {
         headers.all("Expect").flatMap(_.split(",", -1)).map(HttpSyntax.trimOws)
@@ -125,7 +138,8 @@ private[potateh] final class Exchange(
         expectations.nonEmpty && (head.version != "HTTP/1.1" || expectations
           .exists(!_.equalsIgnoreCase("100-continue")))
       ) {
-        reject(417); return false
+        reject(417)
+        break(false)
       }
       val options = headers
         .all("Connection")
@@ -133,10 +147,12 @@ private[potateh] final class Exchange(
         .map(HttpSyntax.trimOws)
         .filter(_.nonEmpty)
       if (!options.forall(_.forall(HttpSyntax.isToken))) {
-        reject(400); return false
+        reject(400)
+        break(false)
       }
       if (options.exists(_.equalsIgnoreCase("upgrade"))) {
-        reject(501); return false
+        reject(501)
+        break(false)
       }
       val persistent = !options.exists(_.equalsIgnoreCase("close")) &&
         (head.version == "HTTP/1.1" || options.exists(

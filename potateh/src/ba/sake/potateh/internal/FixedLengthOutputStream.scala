@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import java.io.{IOException, OutputStream}
 
 /** Writes an exact response body to a caller-owned connection stream. Length zero also serves as strict no-body output:
@@ -27,13 +28,13 @@ private[potateh] final class FixedLengthOutputStream(
     remaining -= 1
   }
 
-  override def write(buffer: Array[Byte], offset: Int, length: Int): Unit = {
+  override def write(buffer: Array[Byte], offset: Int, length: Int): Unit = boundary {
     if (buffer == null) throw new NullPointerException("buffer")
     if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
     }
     checkWritable()
-    if (length == 0) return
+    if (length == 0) break()
     if (length.toLong > remaining) {
       fail(new IOException("Too many response body bytes"))
     }
@@ -48,8 +49,8 @@ private[potateh] final class FixedLengthOutputStream(
     catch { case error: IOException => fail(error) }
   }
 
-  override def close(): Unit = {
-    if (closed) return
+  override def close(): Unit = boundary {
+    if (closed) break()
     closed = true
     failure.foreach(throw _)
     if (remaining != 0) fail(new IOException("Too few response body bytes"))

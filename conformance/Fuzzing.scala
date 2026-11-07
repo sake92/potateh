@@ -1,3 +1,4 @@
+import scala.util.boundary, boundary.break
 import java.io.{ByteArrayOutputStream, EOFException, IOException}
 import java.net.{InetSocketAddress, SocketException}
 import java.nio.ByteBuffer
@@ -116,7 +117,7 @@ object Fuzzing {
         val sample = generate(seed, index)
         val details = describe(sample, seed, index)
         val recovery = request(new Random(0), s"/recovery-$index", close = true, framing = 0)
-        details("recovery_wire") = recovery._1
+        details("recovery_wire") = recovery.wire
         details("phase") = "sequence"
         val observed = new ByteArrayOutputStream
         // Persist before any I/O so interruption or a hung case retains its reproducer.
@@ -129,7 +130,7 @@ object Fuzzing {
           details("phase") = "recovery"
           exercise(
             port,
-            Sample("recovery", Vector(step(new Random(0), recovery._1, Vector(recovery._2), true))),
+            Sample("recovery", Vector(step(new Random(0), recovery.wire, Vector(recovery.expected), true))),
             observed,
             deadline
           )
@@ -216,14 +217,19 @@ object Fuzzing {
     Step(wire, responses, writes.result(), terminal, halfClose)
   }
 
-  private def request(random: Random, target: String, close: Boolean, framing: Int): (String, Expected) = {
+  private def request(
+      random: Random,
+      target: String,
+      close: Boolean,
+      framing: Int
+  ): (wire: String, expected: Expected) = {
     val sizes = Vector(0, 1, 15, 16, 31, 127, 255, 256)
     val size = if (framing == 0) 0 else sizes(random.nextInt(sizes.size))
     val decoy = "\r\nGET /decoy HTTP/1.1\r\nHost: x\r\n\r\n"
     val payload = (decoy + random.alphanumeric.take(256).mkString).take(size)
     val connection = if (close) "Connection: close\r\n" else ""
     val host = if (random.nextBoolean()) "hOsT:\tx\t\r\n" else "Host: x\r\n"
-    val (headers, body, trailer) = framing match {
+    val framed: (headers: String, body: String, trailer: String) = framing match {
       case 0 => ("", "", "")
       case 1 =>
         val padding = "0" * random.nextInt(3)
@@ -248,12 +254,12 @@ object Fuzzing {
     }
     val method = if (framing == 0) "GET" else "POST"
     (
-      s"$method $target HTTP/1.1\r\n$host$headers$connection\r\n$body",
-      Expected(200, target + "\n" + trailer + "\n" + payload)
+      s"$method $target HTTP/1.1\r\n$host${framed.headers}$connection\r\n${framed.body}",
+      Expected(200, target + "\n" + framed.trailer + "\n" + payload)
     )
   }
 
-  private def generate(seed: Long, index: Int): Sample = {
+  private def generate(seed: Long, index: Int): Sample = boundary {
     // Each index has its own PRNG; replay does not need to run earlier cases.
     val random = new Random(seed ^ (index.toLong * -7046029254386353131L))
     val name = families(index % families.size)
@@ -265,7 +271,7 @@ object Fuzzing {
     val sentinel = "GET /sentinel HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
     def head(fields: String): String = s"POST $target HTTP/1.1\r\nHost: x\r\n$fields\r\n"
     def chunks(body: String): String = head("Transfer-Encoding: chunked\r\n") + body
-    val (wire, expected, suffix) = name match {
+    val generated: (wire: String, expected: Expected, suffix: Boolean) = name match {
       case "pipeline" | "staged" =>
         val count = 2 + random.nextInt(4)
         val requests = Vector.tabulate(count) { i =>
@@ -275,8 +281,8 @@ object Fuzzing {
           requests.zipWithIndex.map { case ((text, response), i) =>
             step(random, text, Vector(response), i == count - 1)
           }
-        } else Vector(step(random, requests.map(_._1).mkString, requests.map(_._2), true))
-        return Sample(name, prefix ++ steps)
+        } else Vector(step(random, requests.map(_.wire).mkString, requests.map(_.expected), true))
+        break(Sample(name, prefix ++ steps))
       case "body-limit" =>
         val body = "x" * 256
         (head("Content-Length: 256\r\n") + body, Expected(200, target + "\n\n" + body), true)
@@ -349,12 +355,12 @@ object Fuzzing {
       case "truncated-trailer"        => (chunks("0\r\nX: unfinished"), Expected(400), false)
       case "close-with-suffix"        =>
         val (text, response) = request(random, target, close = true, framing = random.nextInt(3))
-        return Sample(name, prefix :+ step(random, text + sentinel, Vector(response), true))
+        break(Sample(name, prefix :+ step(random, text + sentinel, Vector(response), true)))
     }
-    val tail = if (suffix) wire + sentinel else wire
-    val responses = if (expected.status == 200 && suffix) {
-      Vector(expected, Expected(200, "/sentinel\n\n"))
-    } else Vector(expected)
+    val tail = if (generated.suffix) generated.wire + sentinel else generated.wire
+    val responses = if (generated.expected.status == 200 && generated.suffix) {
+      Vector(generated.expected, Expected(200, "/sentinel\n\n"))
+    } else Vector(generated.expected)
     Sample(name, prefix :+ step(random, tail, responses, true, halfClose = name.startsWith("truncated-")))
   }
 
@@ -374,7 +380,10 @@ object Fuzzing {
         require(readBytes < 65536, "Response exceeded 64 KiB budget")
         socket.setSoTimeout(math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining)).toInt)
         val byte = input.read()
-        if (byte >= 0) { observed.write(byte); readBytes += 1 }
+        if (byte >= 0) {
+          observed.write(byte)
+          readBytes += 1
+        }
         byte
       }
       def line(): String = {
@@ -406,7 +415,7 @@ object Fuzzing {
             status(1) == expected.status.toString,
             s"Expected ${expected.status}, received ${status.mkString(" ")}"
           )
-          val fields = Vector.newBuilder[(String, String)]
+          val fields = Vector.newBuilder[(name: String, value: String)]
           var field = line()
           var count = 0
           while (field.nonEmpty) {
@@ -423,7 +432,7 @@ object Fuzzing {
             lengths.size == 1 && lengths.head.nonEmpty && lengths.head.forall(_.isDigit),
             "Expected one Content-Length"
           )
-          require(!headers.exists(_._1 == "transfer-encoding"), "Unexpected response transfer coding")
+          require(!headers.exists(_.name == "transfer-encoding"), "Unexpected response transfer coding")
           val closes = headers.exists { case (key, value) => key == "connection" && value.equalsIgnoreCase("close") }
           val terminalResponse = part.terminal && responseIndex == part.responses.size - 1
           require(closes == terminalResponse, "Unexpected response persistence policy")

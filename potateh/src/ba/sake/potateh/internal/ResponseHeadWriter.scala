@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import ba.sake.potateh.*
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets.ISO_8859_1
@@ -107,8 +108,8 @@ private[potateh] object ResponseHeadWriter {
       output: OutputStream,
       body: ResponseBody,
       framing: Framing
-  ): Unit = {
-    if (framing == NoBody) return
+  ): Unit = boundary {
+    if (framing == NoBody) break()
     val stream = framing match {
       case FixedLength(size) => new FixedLengthOutputStream(output, size)
       case Chunked           => new ChunkedOutputStream(output)
@@ -116,15 +117,25 @@ private[potateh] object ResponseHeadWriter {
         new OutputStream {
           private var closed = false
           override def write(value: Int): Unit = {
-            check(); output.write(value)
+            check()
+            output.write(value)
           }
           override def write(
               bytes: Array[Byte],
               offset: Int,
               length: Int
-          ): Unit = { check(); output.write(bytes, offset, length) }
-          override def flush(): Unit = { check(); output.flush() }
-          override def close(): Unit = { closed = true; output.flush() }
+          ): Unit = {
+            check()
+            output.write(bytes, offset, length)
+          }
+          override def flush(): Unit = {
+            check()
+            output.flush()
+          }
+          override def close(): Unit = {
+            closed = true
+            output.flush()
+          }
           private def check(): Unit = {
             if (closed) throw new java.io.IOException("Response body is closed")
           }
@@ -136,12 +147,22 @@ private[potateh] object ResponseHeadWriter {
       private def check(): Unit = if (!live) {
         throw new java.io.IOException("Response body escaped its exchange")
       }
-      override def write(value: Int): Unit = { check(); stream.write(value) }
-      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
-        check(); stream.write(bytes, offset, length)
+      override def write(value: Int): Unit = {
+        check()
+        stream.write(value)
       }
-      override def flush(): Unit = { check(); stream.flush() }
-      override def close(): Unit = { check(); stream.close() }
+      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
+        check()
+        stream.write(bytes, offset, length)
+      }
+      override def flush(): Unit = {
+        check()
+        stream.flush()
+      }
+      override def close(): Unit = {
+        check()
+        stream.close()
+      }
     }
     // Only successful writers finalize framing. A failing chunked writer must
     // not emit a terminating chunk that would make a partial response complete.

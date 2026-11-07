@@ -1,7 +1,7 @@
 package ba.sake.potateh
 
 /** Immutable fields in wire order. Repeated fields remain separate. */
-final class Headers private (val fields: Vector[(String, String)]) {
+final class Headers private (val fields: Vector[(name: String, value: String)]) {
   fields.foreach { case (name, value) =>
     require(
       name.nonEmpty && name.forall(internal.HttpSyntax.isToken),
@@ -24,18 +24,18 @@ final class Headers private (val fields: Vector[(String, String)]) {
     case (key, value) if key.equalsIgnoreCase(name) => value
   }
   def add(name: String, value: String): Headers = {
-    Headers.from(fields :+ (name -> value))
+    Headers.from(fields.:+((name = name, value = value)))
   }
   def set(name: String, value: String): Headers = remove(name).add(name, value)
   def remove(name: String): Headers = {
-    Headers.from(fields.filterNot(_._1.equalsIgnoreCase(name)))
+    Headers.from(fields.filterNot(_.name.equalsIgnoreCase(name)))
   }
 }
 
 object Headers {
   val empty: Headers = new Headers(Vector.empty)
-  def apply(fields: (String, String)*): Headers = from(fields.toVector)
-  def from(fields: Vector[(String, String)]): Headers = {
+  def apply(fields: (name: String, value: String)*): Headers = from(fields.toVector)
+  def from(fields: Vector[(name: String, value: String)]): Headers = {
     new Headers(fields)
   }
 }

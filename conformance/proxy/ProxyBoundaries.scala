@@ -182,7 +182,9 @@ object ProxyBoundaries {
               require(server.waitFor(5, TimeUnit.SECONDS), "Fixture stop timed out")
               require(server.exitValue() == 0, "Fixture stop failed")
             } catch {
-              case NonFatal(error) => result("complete") = false; result("stop_error") = error.toString
+              case NonFatal(error) =>
+                result("complete") = false
+                result("stop_error") = error.toString
             } finally ConformanceRunner.Children.stop(server)
           }
           save()
@@ -353,7 +355,9 @@ object ProxyBoundaries {
       socket.setSoTimeout(5000)
       socket
     } catch {
-      case error: Throwable => socket.close(); throw error
+      case error: Throwable =>
+        socket.close()
+        throw error
     }
   }
   private def send(socket: Socket, wire: String): Unit = {
@@ -364,8 +368,11 @@ object ProxyBoundaries {
     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
     var ready = false
     while (!ready && System.nanoTime() < deadline) {
-      try { val socket = connect(port); socket.close(); ready = true }
-      catch { case _: IOException => Thread.sleep(100) }
+      try {
+        val socket = connect(port)
+        socket.close()
+        ready = true
+      } catch { case _: IOException => Thread.sleep(100) }
     }
     require(ready, "Proxy did not become ready within 15 seconds")
   }

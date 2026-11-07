@@ -17,7 +17,10 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
   private var stopped = false
   val thread: Thread = new Thread(() => watch(), "potateh-write-timeouts")
 
-  def stop(): Unit = withLock { stopped = true; changed.signalAll() }
+  def stop(): Unit = withLock {
+    stopped = true
+    changed.signalAll()
+  }
   def output(socket: Socket): OutputStream = {
     val raw = socket.getOutputStream()
     new OutputStream {
@@ -54,7 +57,10 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
         while (!stopped) {
           val now = System.nanoTime()
           val expired = pending.filter(_.deadline - now <= 0).toVector
-          expired.foreach { write => pending -= write; close(write.socket) }
+          expired.foreach { write =>
+            pending -= write
+            close(write.socket)
+          }
           val budgets = pending.iterator.map(_.deadline - now).toVector
           if (budgets.isEmpty) changed.await()
           else changed.awaitNanos(budgets.min)

@@ -87,7 +87,10 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
   }
 
   test("excessWritesAreTerminalAndDoNotEmitAPrefix") {
-    for (mode <- List("single", "bulk"); remaining <- List(0, 1)) {
+    for {
+      mode <- List("single", "bulk")
+      remaining <- List(0, 1)
+    } {
       val sink = new RecordingOutputStream()
       val body = new FixedLengthOutputStream(sink, remaining + 1)
       body.write('a')
@@ -238,7 +241,10 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
   }
 
   test("writeFailuresAreTerminal") {
-    for (mode <- List("single", "bulk"); partial <- List(false, true)) {
+    for {
+      mode <- List("single", "bulk")
+      partial <- List(false, true)
+    } {
       val error = new IOException("sink write failed")
       var broken = false
       var calls = 0
@@ -299,7 +305,10 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
   }
 
   test("flushFailuresAreTerminal") {
-    for (mode <- List("flush", "close"); length <- List(0, 1)) {
+    for {
+      mode <- List("flush", "close")
+      length <- List(0, 1)
+    } {
       val error = new IOException("sink flush failed")
       var broken = true
       var flushes = 0

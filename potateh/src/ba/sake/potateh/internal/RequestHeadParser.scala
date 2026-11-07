@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import java.io.{IOException, InputStream}
 import java.net.{URI, URISyntaxException}
 
@@ -34,7 +35,7 @@ private[potateh] object RequestHeadParser {
       method: String,
       target: String,
       version: String,
-      headers: Vector[(String, String)],
+      headers: Vector[(name: String, value: String)],
       framing: BodyFraming
   )
 
@@ -46,9 +47,9 @@ private[potateh] object RequestHeadParser {
   def read(
       input: InputStream,
       limits: Limits = Limits()
-  ): Option[RequestHead] = {
+  ): Option[RequestHead] = boundary {
     val first = input.read()
-    if (first == -1) return None
+    if (first == -1) break(None)
     val line = {
       readLine(input, first, limits.requestLineBytes, 414, requestLine = true)
     }
@@ -69,7 +70,7 @@ private[potateh] object RequestHeadParser {
     }
     validateTarget(method, target)
 
-    val fields = Vector.newBuilder[(String, String)]
+    val fields = Vector.newBuilder[(name: String, value: String)]
     var sectionBytes = 0
     var count = 0
     var done = false
@@ -125,7 +126,7 @@ private[potateh] object RequestHeadParser {
   }
 
   private def selectFraming(
-      headers: Vector[(String, String)],
+      headers: Vector[(name: String, value: String)],
       version: String
   ): BodyFraming = {
     val lengths = values(headers, "Content-Length")
@@ -221,7 +222,7 @@ private[potateh] object RequestHeadParser {
   }
 
   private def values(
-      headers: Vector[(String, String)],
+      headers: Vector[(name: String, value: String)],
       name: String
   ): Vector[String] = {
     headers.collect { case (key, value) if key.equalsIgnoreCase(name) => value }

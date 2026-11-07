@@ -1,3 +1,4 @@
+import scala.util.boundary, boundary.break
 import java.io.IOException
 import java.net.{InetSocketAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.US_ASCII
@@ -56,7 +57,10 @@ object SlowClients {
       "results" -> results
     )
     try {
-      for (mode <- modes; name <- names) {
+      for {
+        mode <- modes
+        name <- names
+      } {
         val directory = {
           Files.createDirectory(destination.resolve(s"$mode-$name"))
         }
@@ -407,7 +411,9 @@ object SlowClients {
       socket.setSoTimeout(500)
       socket
     } catch {
-      case error: Throwable => socket.close(); throw error
+      case error: Throwable =>
+        socket.close()
+        throw error
     }
   }
 
@@ -438,14 +444,14 @@ object SlowClients {
     val fields = lines.drop(1).filter(_.nonEmpty).map { line =>
       val colon = line.indexOf(':')
       require(colon > 0, "Malformed timeout response header")
-      line.take(colon).toLowerCase -> line.drop(colon + 1).trim
+      (name = line.take(colon).toLowerCase, value = line.drop(colon + 1).trim)
     }
     require(
       ended && text.startsWith("HTTP/1.1 408 ") && text.endsWith("\r\n\r\n") &&
-        fields.count(_._1 == "content-length") == 1 && fields.contains(
+        fields.count(_.name == "content-length") == 1 && fields.contains(
           "content-length" -> "0"
         ) &&
-        !fields.exists(_._1 == "transfer-encoding") && fields.contains(
+        !fields.exists(_.name == "transfer-encoding") && fields.contains(
           "connection" -> "close"
         ),
       "Expected complete bodyless 408 and connection closure before request completion"
@@ -457,7 +463,7 @@ object SlowClients {
       socket: Socket,
       close: Boolean,
       deadline: Long = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500)
-  ): Boolean = {
+  ): Boolean = boundary {
     val input = socket.getInputStream
     val bytes = new java.io.ByteArrayOutputStream()
     var done = false
@@ -475,7 +481,7 @@ object SlowClients {
       if (!close && text.endsWith("\r\n\r\nOK")) done = true
     }
     val text = bytes.toString("US-ASCII")
-    if (done && bytes.size() == 0) return false
+    if (done && bytes.size() == 0) break(false)
     require(
       text.startsWith("HTTP/1.1 200 ") && text.endsWith("\r\n\r\nOK"),
       "Expected complete 200 response with body OK"

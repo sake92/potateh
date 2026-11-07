@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 class ModelTest extends munit.FunSuite {
   test("limits report individual invalid fields in factories and updates") {
     val limits = HttpLimits()
-    val cases = List[(String, Int, Int => HttpLimits, Int => HttpLimits)](
+    val cases = List[(name: String, minimum: Int, create: Int => HttpLimits, update: Int => HttpLimits)](
       ("requestLineBytes", 1, v => HttpLimits(requestLineBytes = v), limits.withRequestLineBytes),
       ("headerLineBytes", 1, v => HttpLimits(headerLineBytes = v), limits.withHeaderLineBytes),
       ("headerSectionBytes", 2, v => HttpLimits(headerSectionBytes = v), limits.withHeaderSectionBytes),
@@ -44,7 +44,7 @@ class ModelTest extends munit.FunSuite {
   }
   test("timeouts report individual invalid fields") {
     val timeouts = HttpTimeouts()
-    val cases = List[(String, FiniteDuration => HttpTimeouts, FiniteDuration => HttpTimeouts)](
+    val cases = List[(name: String, create: FiniteDuration => HttpTimeouts, update: FiniteDuration => HttpTimeouts)](
       ("idle", v => HttpTimeouts(idle = v), timeouts.withIdle),
       ("head", v => HttpTimeouts(head = v), timeouts.withHead),
       ("bodyRead", v => HttpTimeouts(bodyRead = v), timeouts.withBodyRead),
@@ -137,7 +137,10 @@ class ModelTest extends munit.FunSuite {
   }
   test("platform threads publish and join on both targets") {
     val value = new AtomicInteger(0)
-    val thread = new Thread(() => { value.set(42); () })
+    val thread = new Thread(() => {
+      value.set(42)
+      ()
+    })
     thread.start()
     thread.join(2000)
     assert(!thread.isAlive)

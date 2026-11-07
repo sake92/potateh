@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import java.io.{EOFException, IOException, InputStream}
 import java.net.ProtocolException
 
@@ -50,25 +51,25 @@ private[potateh] final class ChunkedInputStream(
 
   def isComplete: Boolean = complete && failure.isEmpty
 
-  override def read(): Int = {
+  override def read(): Int = boundary {
     checkReadable()
     try {
-      if (!prepareChunk()) return -1
+      if (!prepareChunk()) break(-1)
       val next = readByte()
       remaining -= 1
       next
     } catch { case error: IOException => fail(error) }
   }
 
-  override def read(buffer: Array[Byte], offset: Int, length: Int): Int = {
+  override def read(buffer: Array[Byte], offset: Int, length: Int): Int = boundary {
     if (buffer == null) throw new NullPointerException("buffer")
     if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
     }
     checkReadable()
-    if (length == 0) return 0
+    if (length == 0) break(0)
     try {
-      if (!prepareChunk()) return -1
+      if (!prepareChunk()) break(-1)
       val maximum = math.min(remaining, length.toLong).toInt
       val count = input.read(buffer, offset, maximum)
       if (count == -1) throw new EOFException("Truncated chunk data")
@@ -77,9 +78,9 @@ private[potateh] final class ChunkedInputStream(
     } catch { case error: IOException => fail(error) }
   }
 
-  override def skip(count: Long): Long = {
+  override def skip(count: Long): Long = boundary {
     checkReadable()
-    if (count <= 0 || complete) return 0L
+    if (count <= 0 || complete) break(0L)
     val buffer = new Array[Byte](math.min(count, 4096L).toInt)
     var skipped = 0L
     var ended = false
@@ -91,18 +92,18 @@ private[potateh] final class ChunkedInputStream(
     skipped
   }
 
-  override def available(): Int = {
+  override def available(): Int = boundary {
     checkReadable()
-    if (remaining == 0) return 0
+    if (remaining == 0) break(0)
     try math.min(remaining, input.available().toLong).toInt
     catch { case error: IOException => fail(error) }
   }
 
   override def close(): Unit = closed = true
 
-  private def prepareChunk(): Boolean = {
-    if (complete) return false
-    if (remaining > 0) return true
+  private def prepareChunk(): Boolean = boundary {
+    if (complete) break(false)
+    if (remaining > 0) break(true)
     if (needsDelimiter) expectCrlf()
     val line = readLine(limits.chunkLineBytes)
     var index = 0
@@ -183,7 +184,7 @@ private[potateh] final class ChunkedInputStream(
   }
 
   private def readTrailers(): Unit = {
-    val fields = Vector.newBuilder[(String, String)]
+    val fields = Vector.newBuilder[(name: String, value: String)]
     var bytes = 0
     var count = 0
     var ended = false

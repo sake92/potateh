@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import java.io.{IOException, OutputStream}
 import java.nio.charset.StandardCharsets.US_ASCII
 
@@ -29,13 +30,13 @@ private[potateh] final class ChunkedOutputStream(
     } catch { case error: IOException => fail(error) }
   }
 
-  override def write(buffer: Array[Byte], offset: Int, length: Int): Unit = {
+  override def write(buffer: Array[Byte], offset: Int, length: Int): Unit = boundary {
     if (buffer == null) throw new NullPointerException("buffer")
     if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
     }
     checkWritable()
-    if (length == 0) return
+    if (length == 0) break()
     val header = (Integer.toHexString(length) + "\r\n").getBytes(US_ASCII)
     try {
       output.write(header)
@@ -50,8 +51,8 @@ private[potateh] final class ChunkedOutputStream(
     catch { case error: IOException => fail(error) }
   }
 
-  override def close(): Unit = {
-    if (closed) return
+  override def close(): Unit = boundary {
+    if (closed) break()
     closed = true
     failure.foreach(throw _)
     try {

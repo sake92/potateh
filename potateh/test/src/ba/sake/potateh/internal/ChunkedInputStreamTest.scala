@@ -285,10 +285,10 @@ class ChunkedInputStreamTest extends munit.FunSuite {
 
   test("sourceFailuresAreTerminal") {
     val wire = "2\r\nab\r\n0\r\nX: y\r\n\r\n"
-    for (
-      boundary <- 0 until wire.length;
+    for {
+      boundary <- 0 until wire.length
       operation <- List("single", "bulk", "skip")
-    ) {
+    } {
       val error = new IOException("source failure")
       var broken = true
       var calls = 0

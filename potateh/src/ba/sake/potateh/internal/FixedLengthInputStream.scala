@@ -1,5 +1,6 @@
 package ba.sake.potateh.internal
 
+import scala.util.boundary, boundary.break
 import java.io.{EOFException, IOException, InputStream}
 
 /** A request body on a caller-owned connection stream. Close neither drains unread bytes nor closes the source. Only a
@@ -20,9 +21,9 @@ private[potateh] final class FixedLengthInputStream(
 
   def isComplete: Boolean = remaining == 0 && failure.isEmpty
 
-  override def read(): Int = {
+  override def read(): Int = boundary {
     checkReadable()
-    if (remaining == 0) return -1
+    if (remaining == 0) break(-1)
     val next = try input.read()
     catch { case error: IOException => fail(error) }
     if (next == -1) {
@@ -32,14 +33,14 @@ private[potateh] final class FixedLengthInputStream(
     next
   }
 
-  override def read(buffer: Array[Byte], offset: Int, length: Int): Int = {
+  override def read(buffer: Array[Byte], offset: Int, length: Int): Int = boundary {
     if (buffer == null) throw new NullPointerException("buffer")
     if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
     }
     checkReadable()
-    if (length == 0) return 0
-    if (remaining == 0) return -1
+    if (length == 0) break(0)
+    if (remaining == 0) break(-1)
     val maximum = math.min(remaining, length.toLong).toInt
     val count = try input.read(buffer, offset, maximum)
     catch { case error: IOException => fail(error) }
@@ -50,9 +51,9 @@ private[potateh] final class FixedLengthInputStream(
     count
   }
 
-  override def skip(count: Long): Long = {
+  override def skip(count: Long): Long = boundary {
     checkReadable()
-    if (count <= 0 || remaining == 0) return 0L
+    if (count <= 0 || remaining == 0) break(0L)
     val maximum = math.min(count, remaining)
     val buffer = new Array[Byte](math.min(maximum, 4096L).toInt)
     var skipped = 0L
@@ -63,9 +64,9 @@ private[potateh] final class FixedLengthInputStream(
     skipped
   }
 
-  override def available(): Int = {
+  override def available(): Int = boundary {
     checkReadable()
-    if (remaining == 0) return 0
+    if (remaining == 0) break(0)
     val estimate = try input.available()
     catch { case error: IOException => fail(error) }
     math.min(remaining, estimate.toLong).toInt

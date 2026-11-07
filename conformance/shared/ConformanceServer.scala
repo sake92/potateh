@@ -85,11 +85,13 @@ object ConformanceServer {
       } else if (slow && request.target == "/large") {
         Response(body = ResponseBody.Writer(Some(64L * 1024 * 1024)) { out =>
           active.incrementAndGet()
-          println("LARGE_STARTED"); System.out.flush()
+          println("LARGE_STARTED")
+          System.out.flush()
           try {
             val block = new Array[Byte](8192)
             (0 until 8192).foreach(_ => out.write(block))
-            println("LARGE_FINISHED"); System.out.flush()
+            println("LARGE_FINISHED")
+            System.out.flush()
           } finally active.decrementAndGet()
         })
       } else {
@@ -171,7 +173,10 @@ object ConformanceServer {
       } else if (slow || fuzz || proxy) {
         val stop = Paths.get(sys.env("HTTP_CONFORMANCE_STOP_FILE"))
         while (!Files.exists(stop)) {
-          if (slow) { println("WORKERS active=" + active.get()); System.out.flush() }
+          if (slow) {
+            println("WORKERS active=" + active.get())
+            System.out.flush()
+          }
           Thread.sleep(100)
         }
       } else new CountDownLatch(1).await()
