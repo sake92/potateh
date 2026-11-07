@@ -12,7 +12,7 @@ final class Server private (private val engine: internal.BlockingServer) {
 
 object Server {
   def start(
-      config: ServerConfig = ServerConfig()
+      config: ServerConfig = ServerConfig.Default
   )(handle: Request => Response): Server = {
     startServer(config, None, handle)
   }

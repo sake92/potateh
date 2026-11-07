@@ -4,31 +4,28 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.*
 
 class ModelTest extends munit.FunSuite {
-  test("limits report individual invalid fields in factories and updates") {
-    val limits = HttpLimits()
-    val cases = List[(name: String, minimum: Int, create: Int => HttpLimits, update: Int => HttpLimits)](
-      ("requestLineBytes", 1, v => HttpLimits(requestLineBytes = v), limits.withRequestLineBytes),
-      ("headerLineBytes", 1, v => HttpLimits(headerLineBytes = v), limits.withHeaderLineBytes),
-      ("headerSectionBytes", 2, v => HttpLimits(headerSectionBytes = v), limits.withHeaderSectionBytes),
-      ("headerCount", 0, v => HttpLimits(headerCount = v), limits.withHeaderCount),
-      ("chunkLineBytes", 1, v => HttpLimits(chunkLineBytes = v), limits.withChunkLineBytes),
-      ("chunkExtensionBytes", 0, v => HttpLimits(chunkExtensionBytes = v), limits.withChunkExtensionBytes),
-      ("trailerLineBytes", 1, v => HttpLimits(trailerLineBytes = v), limits.withTrailerLineBytes),
-      ("trailerSectionBytes", 2, v => HttpLimits(trailerSectionBytes = v), limits.withTrailerSectionBytes),
-      ("trailerCount", 0, v => HttpLimits(trailerCount = v), limits.withTrailerCount)
+  test("limits report individual invalid fields in updates") {
+    val limits = HttpLimits.Default
+    val cases = List[(name: String, minimum: Int, update: Int => HttpLimits)](
+      ("requestLineBytes", 1, limits.withRequestLineBytes),
+      ("headerLineBytes", 1, limits.withHeaderLineBytes),
+      ("headerSectionBytes", 2, limits.withHeaderSectionBytes),
+      ("headerCount", 0, limits.withHeaderCount),
+      ("chunkLineBytes", 1, limits.withChunkLineBytes),
+      ("chunkExtensionBytes", 0, limits.withChunkExtensionBytes),
+      ("trailerLineBytes", 1, limits.withTrailerLineBytes),
+      ("trailerSectionBytes", 2, limits.withTrailerSectionBytes),
+      ("trailerCount", 0, limits.withTrailerCount)
     )
-    cases.foreach { case (name, minimum, create, update) =>
+    cases.foreach { case (name, minimum, update) =>
       val invalid = minimum - 1
       val expected = s"requirement failed: $name must be at least $minimum (was $invalid)"
-      interceptMessage[IllegalArgumentException](expected)(create(invalid))
       interceptMessage[IllegalArgumentException](expected)(update(invalid))
-      create(minimum)
       update(minimum)
     }
     val expected = "requirement failed: bodyBytes must be nonnegative when defined (was Some(-1))"
-    interceptMessage[IllegalArgumentException](expected)(HttpLimits(bodyBytes = Some(-1)))
     interceptMessage[IllegalArgumentException](expected)(limits.withBodyBytes(Some(-1)))
-    assertEquals(HttpLimits(bodyBytes = Some(0)).bodyBytes, Some(0L))
+    assertEquals(HttpLimits.Default.withBodyBytes(Some(0)).bodyBytes, Some(0L))
     assertEquals(limits.withBodyBytes(None).bodyBytes, None)
   }
   test("response status is validated on creation and updates") {
@@ -43,28 +40,26 @@ class ModelTest extends munit.FunSuite {
     }
   }
   test("timeouts report individual invalid fields") {
-    val timeouts = HttpTimeouts()
-    val cases = List[(name: String, create: FiniteDuration => HttpTimeouts, update: FiniteDuration => HttpTimeouts)](
-      ("idle", v => HttpTimeouts(idle = v), timeouts.withIdle),
-      ("head", v => HttpTimeouts(head = v), timeouts.withHead),
-      ("bodyRead", v => HttpTimeouts(bodyRead = v), timeouts.withBodyRead),
-      ("write", v => HttpTimeouts(write = v), timeouts.withWrite)
+    val timeouts = HttpTimeouts.Default
+    val cases = List[(name: String, update: FiniteDuration => HttpTimeouts)](
+      ("idle", timeouts.withIdle),
+      ("head", timeouts.withHead),
+      ("bodyRead", timeouts.withBodyRead),
+      ("write", timeouts.withWrite)
     )
-    cases.foreach { case (name, create, update) =>
+    cases.foreach { case (name, update) =>
       for (invalid <- List(-1.nanosecond, Duration.Zero, Int.MaxValue.toLong.millis + 1.nanosecond)) {
         val expected = s"requirement failed: $name must be positive and at most 2147483647 milliseconds (was $invalid)"
-        interceptMessage[IllegalArgumentException](expected)(create(invalid))
         interceptMessage[IllegalArgumentException](expected)(update(invalid))
       }
-      create(1.nanosecond)
+      update(1.nanosecond)
       update(Int.MaxValue.toLong.millis)
     }
     for (invalid <- List(-1.nanosecond, 1.day + 1.nanosecond)) {
       val expected = s"requirement failed: shutdownGrace must be between zero and one day (was $invalid)"
-      interceptMessage[IllegalArgumentException](expected)(HttpTimeouts(shutdownGrace = invalid))
       interceptMessage[IllegalArgumentException](expected)(timeouts.withShutdownGrace(invalid))
     }
-    assertEquals(HttpTimeouts(shutdownGrace = Duration.Zero).shutdownGrace, Duration.Zero)
+    assertEquals(HttpTimeouts.Default.withShutdownGrace(Duration.Zero).shutdownGrace, Duration.Zero)
     assertEquals(timeouts.withShutdownGrace(1.day).shutdownGrace, 1.day)
   }
   test("immutable ordered duplicate headers and case insensitive operations") {
@@ -81,20 +76,19 @@ class ModelTest extends munit.FunSuite {
     intercept[IllegalArgumentException](Headers("x" -> "y\r\nBad: z"))
   }
   test("configuration rejects invalid bounds before binding") {
-    intercept[IllegalArgumentException](ServerConfig(maxConnections = 0))
-    intercept[IllegalArgumentException](HttpLimits(bodyBytes = Some(-1)))
-    intercept[IllegalArgumentException](HttpTimeouts(head = Duration.Zero))
+    intercept[IllegalArgumentException](ServerConfig.Default.withMaxConnections(0))
+    intercept[IllegalArgumentException](HttpLimits.Default.withBodyBytes(Some(-1)))
+    intercept[IllegalArgumentException](HttpTimeouts.Default.withHead(Duration.Zero))
     intercept[IllegalArgumentException](
-      HttpTimeouts(head = Int.MaxValue.toLong.millis + 1.nanosecond)
+      HttpTimeouts.Default.withHead(Int.MaxValue.toLong.millis + 1.nanosecond)
     )
     intercept[IllegalArgumentException](ResponseBody.Writer(Some(-1))(_ => ()))
   }
   test("configuration updates preserve unrelated settings and validate new bounds") {
-    val original = ServerConfig(
-      maxConnections = 17,
-      limits = HttpLimits(headerCount = 23),
-      timeouts = HttpTimeouts(head = 7.seconds)
-    )
+    val original = ServerConfig.Default
+      .withMaxConnections(17)
+      .withLimits(HttpLimits.Default.withHeaderCount(23))
+      .withTimeouts(HttpTimeouts.Default.withHead(7.seconds))
     val changed = original
       .withMaxConnections(19)
       .withLimits(original.limits.withBodyBytes(None))
@@ -105,6 +99,9 @@ class ModelTest extends munit.FunSuite {
     assertEquals(changed.limits.bodyBytes, None)
     assertEquals(changed.timeouts.head, 7.seconds)
     assertEquals(changed.timeouts.write, 11.seconds)
+    assertEquals(ServerConfig.Default.maxConnections, 128)
+    assertEquals(HttpLimits.Default.headerCount, 100)
+    assertEquals(HttpTimeouts.Default.head, 10.seconds)
     assertEquals(original.maxConnections, 17)
     assertEquals(original.limits.bodyBytes, Some(8L * 1024 * 1024))
     assertEquals(original.timeouts.write, 30.seconds)

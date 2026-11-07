@@ -85,31 +85,18 @@ final class HttpLimits private (
 }
 
 object HttpLimits {
-  def apply(
-      requestLineBytes: Int = 8192,
-      headerLineBytes: Int = 8192,
-      headerSectionBytes: Int = 32768,
-      headerCount: Int = 100,
-      chunkLineBytes: Int = 8192,
-      chunkExtensionBytes: Int = 32768,
-      trailerLineBytes: Int = 8192,
-      trailerSectionBytes: Int = 16384,
-      trailerCount: Int = 50,
-      bodyBytes: Option[Long] = Some(8L * 1024 * 1024)
-  ): HttpLimits = {
-    new HttpLimits(
-      requestLineBytes,
-      headerLineBytes,
-      headerSectionBytes,
-      headerCount,
-      chunkLineBytes,
-      chunkExtensionBytes,
-      trailerLineBytes,
-      trailerSectionBytes,
-      trailerCount,
-      bodyBytes
-    )
-  }
+  val Default: HttpLimits = new HttpLimits(
+    requestLineBytes = 8192,
+    headerLineBytes = 8192,
+    headerSectionBytes = 32768,
+    headerCount = 100,
+    chunkLineBytes = 8192,
+    chunkExtensionBytes = 32768,
+    trailerLineBytes = 8192,
+    trailerSectionBytes = 16384,
+    trailerCount = 50,
+    bodyBytes = Some(8L * 1024 * 1024)
+  )
 }
 
 final class HttpTimeouts private (
@@ -165,15 +152,13 @@ final class HttpTimeouts private (
 }
 
 object HttpTimeouts {
-  def apply(
-      idle: FiniteDuration = 15.seconds,
-      head: FiniteDuration = 10.seconds,
-      bodyRead: FiniteDuration = 30.seconds,
-      write: FiniteDuration = 30.seconds,
-      shutdownGrace: FiniteDuration = 5.seconds
-  ): HttpTimeouts = {
-    new HttpTimeouts(idle, head, bodyRead, write, shutdownGrace)
-  }
+  val Default: HttpTimeouts = new HttpTimeouts(
+    idle = 15.seconds,
+    head = 10.seconds,
+    bodyRead = 30.seconds,
+    write = 30.seconds,
+    shutdownGrace = 5.seconds
+  )
 }
 
 final class ServerConfig private (
@@ -214,12 +199,10 @@ final class ServerConfig private (
 }
 
 object ServerConfig {
-  def apply(
-      bindAddress: InetSocketAddress = new InetSocketAddress("127.0.0.1", 8080),
-      maxConnections: Int = 128,
-      limits: HttpLimits = HttpLimits(),
-      timeouts: HttpTimeouts = HttpTimeouts()
-  ): ServerConfig = {
-    new ServerConfig(bindAddress, maxConnections, limits, timeouts)
-  }
+  val Default: ServerConfig = new ServerConfig(
+    bindAddress = new InetSocketAddress("127.0.0.1", 8080),
+    maxConnections = 128,
+    limits = HttpLimits.Default,
+    timeouts = HttpTimeouts.Default
+  )
 }

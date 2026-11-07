@@ -27,37 +27,38 @@ object ConformanceServer {
     val capacity = sys.env.getOrElse("HTTP_CONFORMANCE_CAPACITY", "roomy")
     require(Set("roomy", "limited").contains(capacity))
     val active = new AtomicInteger
-    val settings = ServerConfig(
-      bindAddress = new InetSocketAddress("127.0.0.1", 0),
-      maxConnections = if (slow && capacity == "limited") 2 else 128,
-      limits = if (fuzz) {
-        HttpLimits(
-          requestLineBytes = 128,
-          headerLineBytes = 128,
-          headerSectionBytes = 512,
-          headerCount = 8,
-          chunkLineBytes = 64,
-          chunkExtensionBytes = 96,
-          trailerLineBytes = 64,
-          trailerSectionBytes = 128,
-          trailerCount = 4,
-          bodyBytes = Some(256)
-        )
-      } else HttpLimits(bodyBytes = Some(8L * 1024 * 1024)),
-      timeouts = if (fuzz) {
-        HttpTimeouts(idle = 2.seconds, head = 2.seconds, bodyRead = 2.seconds, shutdownGrace = 200.millis)
+    val settings = ServerConfig.Default
+      .withBindAddress(new InetSocketAddress("127.0.0.1", 0))
+      .withMaxConnections(if (slow && capacity == "limited") 2 else 128)
+      .withLimits(if (fuzz) {
+        HttpLimits.Default
+          .withRequestLineBytes(128)
+          .withHeaderLineBytes(128)
+          .withHeaderSectionBytes(512)
+          .withHeaderCount(8)
+          .withChunkLineBytes(64)
+          .withChunkExtensionBytes(96)
+          .withTrailerLineBytes(64)
+          .withTrailerSectionBytes(128)
+          .withTrailerCount(4)
+          .withBodyBytes(Some(256))
+      } else HttpLimits.Default.withBodyBytes(Some(8L * 1024 * 1024)))
+      .withTimeouts(if (fuzz) {
+        HttpTimeouts.Default
+          .withIdle(2.seconds)
+          .withHead(2.seconds)
+          .withBodyRead(2.seconds)
+          .withShutdownGrace(200.millis)
       } else if (sustained) {
-        HttpTimeouts(
-          idle = 2.seconds,
-          head = 1.second,
-          bodyRead = 1.second,
-          write = 1.second,
-          shutdownGrace = 200.millis
-        )
+        HttpTimeouts.Default
+          .withIdle(2.seconds)
+          .withHead(1.second)
+          .withBodyRead(1.second)
+          .withWrite(1.second)
+          .withShutdownGrace(200.millis)
       } else if (profile == "nmap") {
-        HttpTimeouts(head = 15.seconds, shutdownGrace = 200.millis)
-      } else HttpTimeouts(shutdownGrace = 200.millis)
-    )
+        HttpTimeouts.Default.withHead(15.seconds).withShutdownGrace(200.millis)
+      } else HttpTimeouts.Default.withShutdownGrace(200.millis))
     val server = Server.start(settings) { request =>
       if (proxy) {
         println(

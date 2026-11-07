@@ -22,12 +22,12 @@ class PublicApiTest extends munit.FunSuite {
     """))
     assert(!typeChecks("""
       import ba.sake.potateh.*
-      new ServerConfig(new java.net.InetSocketAddress(8080), 1, HttpLimits(), HttpTimeouts())
+      new ServerConfig(new java.net.InetSocketAddress(8080), 1, HttpLimits.Default, HttpTimeouts.Default)
     """))
     assert(!typeChecks("ba.sake.potateh.Response().copy()"))
-    assert(!typeChecks("ba.sake.potateh.ServerConfig().copy()"))
-    assert(!typeChecks("ba.sake.potateh.HttpLimits().copy()"))
-    assert(!typeChecks("ba.sake.potateh.HttpTimeouts().copy()"))
+    assert(!typeChecks("ba.sake.potateh.ServerConfig.Default.copy()"))
+    assert(!typeChecks("ba.sake.potateh.HttpLimits.Default.copy()"))
+    assert(!typeChecks("ba.sake.potateh.HttpTimeouts.Default.copy()"))
     assert(!typeChecks("ba.sake.potateh.Headers.empty.copy()"))
     assert(!typeChecks("ba.sake.potateh.ResponseBody.Writer()(_ => ()).copy()"))
     assert(!typeChecks("def copied(r: ba.sake.potateh.Request) = r.copy()"))

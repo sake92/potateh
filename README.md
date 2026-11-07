@@ -21,8 +21,9 @@ println(server.address) // defaults to 127.0.0.1:8080
 
 Pass a `ServerConfig` to customize the bind address, limits and timeouts.
 Requests, responses, headers, writers and configuration use final classes with
-private constructors. Use named-argument factories for creation and `withX` methods for immutable
-updates, for example `ServerConfig().withMaxConnections(256)` or
+private constructors. Start configuration from `ServerConfig.Default`, `HttpLimits.Default` or
+`HttpTimeouts.Default`; use named-argument factories for the other types. Use `withX` methods for immutable
+updates, for example `ServerConfig.Default.withMaxConnections(256)` or
 `response.withStatus(201)`. These types have no case-class `copy`, extractors or
 `Product` API. Except for `Headers`, they use reference equality.
 
