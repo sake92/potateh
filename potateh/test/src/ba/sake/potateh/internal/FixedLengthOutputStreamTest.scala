@@ -23,8 +23,9 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
       intercept[IOException] { body.write('x') }
       intercept[IOException] { body.flush() }
 
-      val nextHeaders =
+      val nextHeaders = {
         "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n".getBytes(ISO_8859_1)
+      }
       connection.write(nextHeaders)
       val next = new FixedLengthOutputStream(connection, 2)
       next.write("ok".getBytes(ISO_8859_1))
@@ -181,8 +182,9 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
 
   test("emptyWritesDoNotTouchTheSink") {
     val sink = new ByteArrayOutputStream() {
-      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit =
+      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
         throw new AssertionError("Empty write must not reach sink")
+      }
     }
     val body = new FixedLengthOutputStream(sink, 0)
     body.write(new Array[Byte](0))
@@ -262,8 +264,9 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
           super.write(bytes, offset, length)
         }
         override def flush(): Unit = calls += 1
-        override def close(): Unit =
+        override def close(): Unit = {
           throw new AssertionError("Sink is caller-owned")
+        }
       }
       val body = new FixedLengthOutputStream(sink, 4)
       body.write('a')
@@ -305,8 +308,9 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
           flushes += 1
           if (broken) throw error
         }
-        override def close(): Unit =
+        override def close(): Unit = {
           throw new AssertionError("Sink is caller-owned")
+        }
       }
       val body = new FixedLengthOutputStream(sink, length)
       if (length == 1) body.write('a')
@@ -336,4 +340,5 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
     override def flush(): Unit = flushes += 1
     override def close(): Unit = closes += 1
   }
+
 }

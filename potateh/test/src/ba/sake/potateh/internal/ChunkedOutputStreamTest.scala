@@ -19,8 +19,9 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
     val bytes = "_0123456789abcdef_".getBytes(ISO_8859_1)
     body.write(bytes, 1, 16)
     body.write("0123456789".getBytes(ISO_8859_1))
-    val expected =
+    val expected = {
       "1\r\n\u00ff\r\n1\r\n\u00fe\r\n10\r\n0123456789abcdef\r\na\r\n0123456789\r\n"
+    }
     assertEquals(sink.toByteArray().toSeq, expected.getBytes(ISO_8859_1).toSeq)
     assertEquals(bytes.toSeq, "_0123456789abcdef_".getBytes(ISO_8859_1).toSeq)
     assert(!(body.isComplete))
@@ -147,8 +148,9 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
             else body.write("bcd".getBytes(ISO_8859_1))
           }
         } eq sink.error)
-        val expected =
+        val expected = {
           (initial + chunk.substring(0, boundary)).getBytes(ISO_8859_1)
+        }
         assertEquals(sink.bytes.toByteArray().toSeq, expected.toSeq)
         val writesAtFailure = sink.writes
         sink.failAt = -1
@@ -177,8 +179,9 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
       val initial = "1\r\na\r\n"
       sink.failAt = initial.length + boundary
       assert(intercept[IOException] { body.close() } eq sink.error)
-      val expected =
+      val expected = {
         (initial + ending.substring(0, boundary)).getBytes(ISO_8859_1)
+      }
       assertEquals(sink.bytes.toByteArray().toSeq, expected.toSeq)
       val writesAtFailure = sink.writes
       sink.failAt = -1
@@ -204,8 +207,9 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
           if (mode == "flush") body.flush() else body.close()
         }
       } eq sink.error)
-      val expected =
+      val expected = {
         if (mode == "flush") "1\r\na\r\n" else "1\r\na\r\n0\r\n\r\n"
+      }
       val writesAtFailure = sink.writes
       sink.failFlush = false
       assert(intercept[IOException] { body.write('x') } eq sink.error)
@@ -230,8 +234,9 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
     val expected = new ByteArrayOutputStream()
     val body = new ChunkedOutputStream(sink)
     for (size <- List(1, 2, 15, 16, 255, 256, 4097)) {
-      val bytes =
+      val bytes = {
         Array.tabulate[Byte](size)(index => ((index * 37) % 256).toByte)
+      }
       body.write(bytes)
       expected.write(bytes)
       body.write(255)
@@ -280,4 +285,5 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
 
     override def close(): Unit = closes += 1
   }
+
 }

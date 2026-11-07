@@ -31,8 +31,9 @@ class ChunkedInputStreamTest extends munit.FunSuite {
 
   test("cumulativeBodyLimitCannotOverflowLong") {
     val source = stream("1\r\na\r\n7fffffffffffffff\r\nN")
-    val body =
+    val body = {
       new ChunkedInputStream(source, maxBodyBytes = Some(Long.MaxValue))
+    }
     assertEquals(body.read(), 'a'.toInt)
     intercept[ChunkedInputStream.BodyTooLargeException] { body.read() }
     assertEquals(source.read(), 'N'.toInt)
@@ -322,10 +323,11 @@ class ChunkedInputStreamTest extends munit.FunSuite {
       assert(!(body.isComplete))
     }
     val error = new IOException("availability failed")
-    val source =
+    val source = {
       new ByteArrayInputStream("2\r\nab\r\n0\r\n\r\n".getBytes(ISO_8859_1)) {
         override def available(): Int = throw error
       }
+    }
     val body = new ChunkedInputStream(source)
     assertEquals(body.read(), 'a'.toInt)
     assert(intercept[IOException] { body.available() } eq error)
@@ -336,10 +338,12 @@ class ChunkedInputStreamTest extends munit.FunSuite {
     val source = new ByteArrayInputStream(
       ("3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n" + nextRequest).getBytes(ISO_8859_1)
     ) {
-      override def read(b: Array[Byte], off: Int, len: Int): Int =
+      override def read(b: Array[Byte], off: Int, len: Int): Int = {
         super.read(b, off, math.min(len, 1))
-      override def skip(count: Long): Long =
+      }
+      override def skip(count: Long): Long = {
         throw new AssertionError("Must decode skipped bytes")
+      }
     }
     val body = new ChunkedInputStream(source)
     assertEquals(body.skip(-1), 0L)
@@ -392,10 +396,11 @@ class ChunkedInputStreamTest extends munit.FunSuite {
 
   test("closeAndResetPreserveConnectionOwnership") {
     var sourceClosed = false
-    val source =
+    val source = {
       new ByteArrayInputStream("2\r\nab\r\n0\r\n\r\n".getBytes(ISO_8859_1)) {
         override def close(): Unit = sourceClosed = true
       }
+    }
     val body = new ChunkedInputStream(source)
     assert(!(body.markSupported()))
     assertEquals(body.read(), 'a'.toInt)
@@ -410,10 +415,11 @@ class ChunkedInputStreamTest extends munit.FunSuite {
     intercept[IOException] { body.skip(0) }
     intercept[IOException] { body.available() }
     assertEquals(source.read(), 'b'.toInt)
-    val completeSource =
+    val completeSource = {
       new ByteArrayInputStream("0\r\n\r\nNEXT".getBytes(ISO_8859_1)) {
         override def close(): Unit = sourceClosed = true
       }
+    }
     val complete = new ChunkedInputStream(completeSource)
     assertEquals(complete.read(), -1)
     complete.close()
@@ -424,8 +430,9 @@ class ChunkedInputStreamTest extends munit.FunSuite {
 
   private val nextRequest = "GET /next HTTP/1.0\r\n\r\n"
 
-  private def stream(wire: String): ByteArrayInputStream =
+  private def stream(wire: String): ByteArrayInputStream = {
     new ByteArrayInputStream(wire.getBytes(ISO_8859_1))
+  }
 
   private def drain(input: InputStream): String = {
     val output = new ByteArrayOutputStream()

@@ -4,11 +4,12 @@ import java.io.{IOException, OutputStream}
 import java.net.{Socket, SocketTimeoutException}
 import scala.collection.mutable
 
-/** One server-owned watcher; deadlines cover socket writes, never handler
-  * computation.
+/** One server-owned watcher; deadlines cover socket writes, never handler computation.
   */
 private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
+
   private final class Pending(val socket: Socket, val deadline: Long)
+
   private val lock = new Object
   private val pending = mutable.Set.empty[Pending]
   private var stopped = false
@@ -19,8 +20,9 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
     val raw = socket.getOutputStream()
     new OutputStream {
       override def write(value: Int): Unit = timed(socket)(raw.write(value))
-      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit =
+      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
         timed(socket)(raw.write(bytes, offset, length))
+      }
       override def flush(): Unit = timed(socket)(raw.flush())
     }
   }
@@ -45,7 +47,7 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
     }
   }
   private def watch(): Unit = {
-    try
+    try {
       lock.synchronized {
         while (!stopped) {
           val now = System.nanoTime()
@@ -56,13 +58,14 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
           else lock.wait(math.max(1L, (budgets.min + 999999L) / 1000000L))
         }
       }
-    catch { case _: InterruptedException => Thread.currentThread().interrupt() }
-    finally
+    } catch { case _: InterruptedException => Thread.currentThread().interrupt() }
+    finally {
       lock.synchronized {
         stopped = true
         pending.foreach(write => close(write.socket))
         pending.clear()
       }
+    }
   }
   private def close(socket: Socket): Unit = try socket.close()
   catch { case _: IOException => () }

@@ -1,11 +1,6 @@
 package ba.sake.potateh.internal
 
-import java.io.{
-  BufferedInputStream,
-  ByteArrayInputStream,
-  IOException,
-  InputStream
-}
+import java.io.{BufferedInputStream, ByteArrayInputStream, IOException, InputStream}
 import java.nio.charset.StandardCharsets.ISO_8859_1
 
 import RequestHeadParser._
@@ -194,8 +189,9 @@ class RequestHeadParserTest extends munit.FunSuite {
     rejected(wire, 431, limits.copy(headerLineBytes = 6))
     rejected(wire, 431, limits.copy(headerSectionBytes = 16))
     rejected(wire, 431, limits.copy(headerCount = 1))
-    val emptyHeaders =
+    val emptyHeaders = {
       Limits(headerLineBytes = 0, headerSectionBytes = 2, headerCount = 0)
+    }
     assertEquals(parse("GET / HTTP/1.0\r\n\r\n", emptyHeaders).framing, NoBody)
     rejected("GET / HTTP/1.0\r\nX: y\r\n\r\n", 431, emptyHeaders)
     // Also check the shipped defaults, not only injected small limits.
@@ -231,8 +227,9 @@ class RequestHeadParserTest extends munit.FunSuite {
 
   test("preservesBodiesAndFollowingRequests") {
     val second = "GET /next HTTP/1.0\r\n\r\n"
-    val input =
+    val input = {
       stream(request("Content-Length: 4\r\n", "POST") + "body" + second)
+    }
     assertEquals(read(input).get.framing, FixedLength(4))
     assertEquals(
       new String(Array.fill[Byte](4)(input.read().toByte), ISO_8859_1),
@@ -241,8 +238,9 @@ class RequestHeadParserTest extends munit.FunSuite {
     assertEquals(read(input).get.target, "/next")
     assertEquals(read(input), None)
 
-    val chunked =
+    val chunked = {
       stream(request("Transfer-Encoding: chunked\r\n") + "0\r\n\r\n" + second)
+    }
     assertEquals(read(chunked).get.framing, Chunked)
     assertEquals(chunked.read(), '0'.toInt)
 
@@ -254,8 +252,9 @@ class RequestHeadParserTest extends munit.FunSuite {
 
   test("handlesEveryFragmentBoundary") {
     val head = request("Content-Length: 3\r\nX-Test: abc\r\n", "POST")
-    val bytes =
+    val bytes = {
       (head + "xyz" + "GET /next HTTP/1.0\r\n\r\n").getBytes(ISO_8859_1)
+    }
     (1 until head.length).foreach { boundary =>
       val source = new ByteArrayInputStream(bytes) {
         override def read(b: Array[Byte], off: Int, len: Int): Int = {
@@ -275,14 +274,17 @@ class RequestHeadParserTest extends munit.FunSuite {
     }
   }
 
-  private def request(fields: String, method: String = "GET"): String =
+  private def request(fields: String, method: String = "GET"): String = {
     method + " / HTTP/1.1\r\nHost: example.org\r\n" + fields + "\r\n"
+  }
 
-  private def stream(wire: String): ByteArrayInputStream =
+  private def stream(wire: String): ByteArrayInputStream = {
     new ByteArrayInputStream(wire.getBytes(ISO_8859_1))
+  }
 
-  private def parse(wire: String, limits: Limits = Limits()): RequestHead =
+  private def parse(wire: String, limits: Limits = Limits()): RequestHead = {
     read(stream(wire), limits).get
+  }
 
   private def rejected(
       wire: String,

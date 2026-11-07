@@ -1,18 +1,12 @@
 import java.io.IOException
-import java.net.{
-  InetSocketAddress,
-  Socket,
-  SocketException,
-  SocketTimeoutException
-}
+import java.net.{InetSocketAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.US_ASCII
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.util.control.NonFatal
 
-/** Bounded loopback observations. Pressure is measured; recovery and cleanup
-  * are asserted.
+/** Bounded loopback observations. Pressure is measured; recovery and cleanup are asserted.
   */
 object SlowClients {
   val scenarios = Seq(
@@ -40,12 +34,14 @@ object SlowClients {
       revision: String,
       idleDripExpectation: String
   ): Int = {
-    val modes =
+    val modes = {
       if (capacity == "both") Seq("roomy", "limited") else Seq(capacity)
-    val names =
+    }
+    val names = {
       if (suite == "slowhttptest") Seq("H", "B", "X")
       else if (selected.isEmpty) scenarios
       else selected.distinct
+    }
     val results = ujson.Arr()
     val report = ujson.Obj(
       "suite" -> suite,
@@ -61,10 +57,12 @@ object SlowClients {
     )
     try {
       for (mode <- modes; name <- names) {
-        val directory =
+        val directory = {
           Files.createDirectory(destination.resolve(s"$mode-$name"))
-        val result =
+        }
+        val result = {
           ujson.Obj("capacity" -> mode, "scenario" -> name, "complete" -> false)
+        }
         results.value += result
         try {
           observe(
@@ -94,11 +92,12 @@ object SlowClients {
         )
       }
       if (results.value.forall(_("complete").bool)) 0 else 1
-    } finally
+    } finally {
       Files.writeString(
         destination.resolve("run.json"),
         ujson.write(report, indent = 2) + "\n"
       )
+    }
   }
 
   private def observe(
@@ -139,9 +138,10 @@ object SlowClients {
       samples.value += resources(server.pid(), "before")
       if (suite == "slowhttptest") {
         val path = if (name == "X") "/large" else "/body"
-        val options =
+        val options = {
           if (name == "X") Seq("-w", "512", "-y", "1024", "-n", "1", "-z", "32")
           else Seq("-i", "1", "-x", "1")
+        }
         val probeCommand = Seq(
           source.resolve("src/slowhttptest").toAbsolutePath.toString,
           s"-$name",
@@ -173,8 +173,7 @@ object SlowClients {
         for (_ <- 0 until count) {
           val socket = connect(
             port,
-            smallReceiveBuffer =
-              name.contains("write") || name == "response-reader"
+            smallReceiveBuffer = name.contains("write") || name == "response-reader"
           )
           sockets += socket
           if (name == "idle-drip") {
@@ -233,8 +232,9 @@ object SlowClients {
       }
       val seconds = if (name == "idle-drip") 32 else duration
       val deadline = started + TimeUnit.SECONDS.toNanos(seconds.toLong)
-      val toolDeadline =
+      val toolDeadline = {
         started + (math.min(timeout, duration + 5.0) * 1000000000).toLong
+      }
       var nextDrip = started
       var dripFailures = 0
       var pressure = true
@@ -279,11 +279,13 @@ object SlowClients {
         ConformanceRunner.Children.stop(process)
       }
       val text = Files.readString(log)
-      val bodyCase =
+      val bodyCase = {
         Set("fixed-body", "chunk-data", "trailers", "shutdown-read", "B")
           .contains(name)
-      if (bodyCase)
+      }
+      if (bodyCase) {
         require(text.contains("HANDLING /body"), "Body handler was not reached")
+      }
       if (writeCase) {
         val begun = "LARGE_STARTED".r.findAllIn(text).length
         val finished = "LARGE_FINISHED".r.findAllIn(text).length
@@ -291,24 +293,23 @@ object SlowClients {
         result("large_finished") = finished
         require(begun > finished, "No unfinished large response observed")
       }
-      result("admission_saturation_observed") =
-        text.contains("WORKERS active=2")
-      if (
-        mode == "limited" && suite == "slowclients" && (bodyCase || writeCase)
-      )
+      result("admission_saturation_observed") = text.contains("WORKERS active=2")
+      if (mode == "limited" && suite == "slowclients" && (bodyCase || writeCase)) {
         require(
           result("admission_saturation_observed").bool,
           "Admitted worker saturation was not reached"
         )
+      }
       if (name == "idle-drip") {
         val state = states.head
         if (state("state").str == "data") {
-          val rejection =
+          val rejection = {
             readTimeoutRejection(sockets.head, state("first_byte").num.toInt)
+          }
           state("timeout_response") = rejection
           state("state") = "closed"
         }
-        val survived =
+        val survived = {
           if (state("state").str == "closed") false
           else {
             try {
@@ -320,6 +321,7 @@ object SlowClients {
                 false
             }
           }
+        }
         val outcome = if (survived) "survived" else "closed"
         if (!survived && state("state").str != "closed") {
           state("state") = "closed"
@@ -336,9 +338,9 @@ object SlowClients {
           "Expected dripped connection to survive the observation window"
         )
       }
-      if (name.startsWith("shutdown-"))
+      if (name.startsWith("shutdown-")) {
         gracefulStop(server, stopFile, log, port, result)
-      else {
+      } else {
         sockets.foreach(_.close())
         val recoveryStart = System.nanoTime()
         val recovery = ujson.Arr()
@@ -359,10 +361,10 @@ object SlowClients {
         gracefulStop(server, stopFile, log, port, result)
       }
     } finally {
-      sockets.foreach(socket =>
+      sockets.foreach(socket => {
         try socket.close()
         catch { case _: IOException => () }
-      )
+      })
       external.foreach(ConformanceRunner.Children.stop)
       ConformanceRunner.Children.stop(server)
     }
@@ -414,8 +416,8 @@ object SlowClients {
     socket.getOutputStream.flush()
   }
 
-  /** A deadline rejection is valid before a complete request head. Accept only
-    * an exact bodyless 408 followed by EOF; premature success still fails.
+  /** A deadline rejection is valid before a complete request head. Accept only an exact bodyless 408 followed by EOF;
+    * premature success still fails.
     */
   private def readTimeoutRejection(socket: Socket, first: Int): String = {
     val bytes = new java.io.ByteArrayOutputStream
@@ -511,18 +513,17 @@ object SlowClients {
       "phase" -> phase,
       "time_ms" -> System.currentTimeMillis().toDouble
     )
-    Seq("VmRSS" -> "rss_kib", "Threads" -> "threads").foreach {
-      case (field, key) =>
-        val pattern = ("(?m)^" + field + ":\\s+(\\d+)").r
-        result(key) = pattern
-          .findFirstMatchIn(status)
-          .getOrElse(
-            throw new IllegalStateException(
-              "Missing process resource field: " + field
-            )
+    Seq("VmRSS" -> "rss_kib", "Threads" -> "threads").foreach { case (field, key) =>
+      val pattern = ("(?m)^" + field + ":\\s+(\\d+)").r
+      result(key) = pattern
+        .findFirstMatchIn(status)
+        .getOrElse(
+          throw new IllegalStateException(
+            "Missing process resource field: " + field
           )
-          .group(1)
-          .toDouble
+        )
+        .group(1)
+        .toDouble
     }
     val files = Files.list(root.resolve("fd"))
     try result("fds") = files.count().toDouble

@@ -15,13 +15,14 @@ class ResponseHeadWriterTest extends munit.FunSuite {
       method: String = "GET",
       version: String = "HTTP/1.1",
       status: Int = 200
-  ) =
+  ) = {
     prepare(
       method,
       version,
       Response(status, Headers("Date" -> date), body),
       false
     )
+  }
 
   test("serializes status and ordered repeated fields without flattening") {
     val response = Response(
@@ -66,9 +67,9 @@ class ResponseHeadWriterTest extends munit.FunSuite {
       assertEquals(sink.size(), 0)
       assert(!called)
       if (status == 204) assert(!text(result.bytes).contains("Content-Length"))
-      else if (status == 205)
+      else if (status == 205) {
         assert(text(result.bytes).contains("Content-Length: 0\r\n"))
-      else assert(text(result.bytes).contains("Content-Length: 4\r\n"))
+      } else assert(text(result.bytes).contains("Content-Length: 4\r\n"))
     }
   }
   test(
@@ -106,10 +107,11 @@ class ResponseHeadWriterTest extends munit.FunSuite {
     ) {
       intercept[IllegalArgumentException](Headers(name -> value))
     }
-    for (status <- List(99, 100, 101, 199, 600))
+    for (status <- List(99, 100, 101, 199, 600)) {
       intercept[IllegalArgumentException](
         prepared(ResponseBody.Empty, status = status)
       )
+    }
     intercept[IllegalArgumentException](
       prepared(ResponseBody.Empty, method = "CONNECT")
     )
@@ -119,8 +121,9 @@ class ResponseHeadWriterTest extends munit.FunSuite {
   ) {
     for (actual <- List(1, 3)) {
       val sink = new ByteArrayOutputStream()
-      val body =
+      val body = {
         ResponseBody.Writer(Some(2))(out => out.write(new Array[Byte](actual)))
+      }
       intercept[IOException](writeBody(sink, body, FixedLength(2)))
     }
     var escaped: Option[OutputStream] = None

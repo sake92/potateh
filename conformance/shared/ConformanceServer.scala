@@ -9,8 +9,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.concurrent.duration.*
 
-/** Application fixture only; policy and environment access do not enter the
-  * library.
+/** Application fixture only; policy and environment access do not enter the library.
   */
 object ConformanceServer {
   def main(args: Array[String]): Unit = {
@@ -48,7 +47,7 @@ object ConformanceServer {
       } else {
         active.incrementAndGet()
         try {
-          val bytes =
+          val bytes = {
             if (
               profile == "http11probe" && request.target.takeWhile(
                 _ != '?'
@@ -56,9 +55,7 @@ object ConformanceServer {
             ) {
               val text = new StringBuilder
               request.headers.fields.foreach { case (name, value) =>
-                val lower = name.map(c =>
-                  if (c >= 'A' && c <= 'Z') (c + 32).toChar else c
-                )
+                val lower = name.map(c => if (c >= 'A' && c <= 'Z') (c + 32).toChar else c)
                 text.append(lower).append(": ").append(value).append('\n')
               }
               text.toString.getBytes(UTF_8)
@@ -67,6 +64,7 @@ object ConformanceServer {
               request.body.transferTo(sink)
               sink.toByteArray
             } else "OK".getBytes(UTF_8)
+          }
           Response(
             headers = Headers("Content-Type" -> "text/plain"),
             body = ResponseBody.bytes(bytes)

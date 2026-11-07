@@ -12,9 +12,7 @@ private[potateh] object HttpSyntax {
   def trimOws(value: String): String = {
     var start = 0
     var end = value.length
-    while (
-      start < end && (value.charAt(start) == ' ' || value.charAt(start) == '\t')
-    ) start += 1
+    while (start < end && (value.charAt(start) == ' ' || value.charAt(start) == '\t')) start += 1
     while (
       end > start && (value
         .charAt(end - 1) == ' ' || value.charAt(end - 1) == '\t')
@@ -22,10 +20,12 @@ private[potateh] object HttpSyntax {
     value.substring(start, end)
   }
 
-  def isToken(c: Char): Boolean =
+  def isToken(c: Char): Boolean = {
     (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-      (c >= '0' && c <= '9') || "!#$%&'*+-.^_`|~".indexOf(c) >= 0
+    (c >= '0' && c <= '9') || "!#$%&'*+-.^_`|~".indexOf(c) >= 0
+  }
 
-  def isFieldValue(value: String): Boolean =
+  def isFieldValue(value: String): Boolean = {
     value.forall(c => c == '\t' || (c >= ' ' && c != 127 && c <= 255))
+  }
 }

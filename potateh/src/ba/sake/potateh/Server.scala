@@ -9,14 +9,16 @@ final class Server private (private val engine: internal.BlockingServer) {
   def address: InetSocketAddress = engine.address
   def stop(): Unit = engine.stop()
 }
+
 object Server {
   def start(
       config: ServerConfig = ServerConfig()
-  )(handle: Request => Response): Server =
+  )(handle: Request => Response): Server = {
     startServer(config, None, handle)
+  }
 
-  /** The caller owns the executor. Each task serves an entire connection.
-    * Rejection must throw rather than silently discard tasks.
+  /** The caller owns the executor. Each task serves an entire connection. Rejection must throw rather than silently
+    * discard tasks.
     */
   def start(config: ServerConfig, executor: Executor)(
       handle: Request => Response

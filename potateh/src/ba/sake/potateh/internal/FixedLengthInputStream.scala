@@ -2,8 +2,8 @@ package ba.sake.potateh.internal
 
 import java.io.{EOFException, IOException, InputStream}
 
-/** A request body on a caller-owned connection stream. Close neither drains
-  * unread bytes nor closes the source. Only a complete body permits reuse.
+/** A request body on a caller-owned connection stream. Close neither drains unread bytes nor closes the source. Only a
+  * complete body permits reuse.
   */
 private[potateh] final class FixedLengthInputStream(
     private val input: InputStream,
@@ -25,26 +25,27 @@ private[potateh] final class FixedLengthInputStream(
     if (remaining == 0) return -1
     val next = try input.read()
     catch { case error: IOException => fail(error) }
-    if (next == -1)
+    if (next == -1) {
       fail(new EOFException("Truncated fixed-length request body"))
+    }
     remaining -= 1
     next
   }
 
   override def read(buffer: Array[Byte], offset: Int, length: Int): Int = {
     if (buffer == null) throw new NullPointerException("buffer")
-    if (
-      offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset
-    )
+    if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
+    }
     checkReadable()
     if (length == 0) return 0
     if (remaining == 0) return -1
     val maximum = math.min(remaining, length.toLong).toInt
     val count = try input.read(buffer, offset, maximum)
     catch { case error: IOException => fail(error) }
-    if (count == -1)
+    if (count == -1) {
       fail(new EOFException("Truncated fixed-length request body"))
+    }
     remaining -= count
     count
   }

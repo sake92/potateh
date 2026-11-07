@@ -23,12 +23,15 @@ final class Headers private (val fields: Vector[(String, String)]) {
   def all(name: String): Vector[String] = fields.collect {
     case (key, value) if key.equalsIgnoreCase(name) => value
   }
-  def add(name: String, value: String): Headers =
+  def add(name: String, value: String): Headers = {
     Headers.from(fields :+ (name -> value))
+  }
   def set(name: String, value: String): Headers = remove(name).add(name, value)
-  def remove(name: String): Headers =
+  def remove(name: String): Headers = {
     Headers.from(fields.filterNot(_._1.equalsIgnoreCase(name)))
+  }
 }
+
 object Headers {
   val empty: Headers = new Headers(Vector.empty)
   def apply(fields: (String, String)*): Headers = from(fields.toVector)

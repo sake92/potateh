@@ -22,26 +22,36 @@ final class HttpLimits private (
   require(headerCount >= 0 && trailerCount >= 0 && chunkExtensionBytes >= 0)
   require(bodyBytes.forall(_ >= 0))
 
-  def withRequestLineBytes(value: Int): HttpLimits =
+  def withRequestLineBytes(value: Int): HttpLimits = {
     copy(requestLineBytes = value)
-  def withHeaderLineBytes(value: Int): HttpLimits =
+  }
+  def withHeaderLineBytes(value: Int): HttpLimits = {
     copy(headerLineBytes = value)
-  def withHeaderSectionBytes(value: Int): HttpLimits =
+  }
+  def withHeaderSectionBytes(value: Int): HttpLimits = {
     copy(headerSectionBytes = value)
-  def withHeaderCount(value: Int): HttpLimits =
+  }
+  def withHeaderCount(value: Int): HttpLimits = {
     copy(headerCount = value)
-  def withChunkLineBytes(value: Int): HttpLimits =
+  }
+  def withChunkLineBytes(value: Int): HttpLimits = {
     copy(chunkLineBytes = value)
-  def withChunkExtensionBytes(value: Int): HttpLimits =
+  }
+  def withChunkExtensionBytes(value: Int): HttpLimits = {
     copy(chunkExtensionBytes = value)
-  def withTrailerLineBytes(value: Int): HttpLimits =
+  }
+  def withTrailerLineBytes(value: Int): HttpLimits = {
     copy(trailerLineBytes = value)
-  def withTrailerSectionBytes(value: Int): HttpLimits =
+  }
+  def withTrailerSectionBytes(value: Int): HttpLimits = {
     copy(trailerSectionBytes = value)
-  def withTrailerCount(value: Int): HttpLimits =
+  }
+  def withTrailerCount(value: Int): HttpLimits = {
     copy(trailerCount = value)
-  def withBodyBytes(value: Option[Long]): HttpLimits =
+  }
+  def withBodyBytes(value: Option[Long]): HttpLimits = {
     copy(bodyBytes = value)
+  }
 
   private def copy(
       requestLineBytes: Int = this.requestLineBytes,
@@ -54,7 +64,7 @@ final class HttpLimits private (
       trailerSectionBytes: Int = this.trailerSectionBytes,
       trailerCount: Int = this.trailerCount,
       bodyBytes: Option[Long] = this.bodyBytes
-  ): HttpLimits =
+  ): HttpLimits = {
     new HttpLimits(
       requestLineBytes,
       headerLineBytes,
@@ -67,7 +77,9 @@ final class HttpLimits private (
       trailerCount,
       bodyBytes
     )
+  }
 }
+
 object HttpLimits {
   def apply(
       requestLineBytes: Int = 8192,
@@ -80,7 +92,7 @@ object HttpLimits {
       trailerSectionBytes: Int = 16384,
       trailerCount: Int = 50,
       bodyBytes: Option[Long] = Some(8L * 1024 * 1024)
-  ): HttpLimits =
+  ): HttpLimits = {
     new HttpLimits(
       requestLineBytes,
       headerLineBytes,
@@ -93,7 +105,9 @@ object HttpLimits {
       trailerCount,
       bodyBytes
     )
+  }
 }
+
 final class HttpTimeouts private (
     val idle: FiniteDuration,
     val head: FiniteDuration,
@@ -103,9 +117,7 @@ final class HttpTimeouts private (
 ) {
   private val io = List(idle, head, bodyRead, write)
   require(
-    io.forall(d =>
-      d.toNanos > 0 && d.toNanos <= Int.MaxValue.toLong * 1000000L
-    ),
+    io.forall(d => d.toNanos > 0 && d.toNanos <= Int.MaxValue.toLong * 1000000L),
     "I/O timeouts must fit socket milliseconds"
   )
   require(
@@ -113,16 +125,21 @@ final class HttpTimeouts private (
     "Shutdown grace must be between zero and one day"
   )
 
-  def withIdle(value: FiniteDuration): HttpTimeouts =
+  def withIdle(value: FiniteDuration): HttpTimeouts = {
     copy(idle = value)
-  def withHead(value: FiniteDuration): HttpTimeouts =
+  }
+  def withHead(value: FiniteDuration): HttpTimeouts = {
     copy(head = value)
-  def withBodyRead(value: FiniteDuration): HttpTimeouts =
+  }
+  def withBodyRead(value: FiniteDuration): HttpTimeouts = {
     copy(bodyRead = value)
-  def withWrite(value: FiniteDuration): HttpTimeouts =
+  }
+  def withWrite(value: FiniteDuration): HttpTimeouts = {
     copy(write = value)
-  def withShutdownGrace(value: FiniteDuration): HttpTimeouts =
+  }
+  def withShutdownGrace(value: FiniteDuration): HttpTimeouts = {
     copy(shutdownGrace = value)
+  }
 
   private def copy(
       idle: FiniteDuration = this.idle,
@@ -130,7 +147,7 @@ final class HttpTimeouts private (
       bodyRead: FiniteDuration = this.bodyRead,
       write: FiniteDuration = this.write,
       shutdownGrace: FiniteDuration = this.shutdownGrace
-  ): HttpTimeouts =
+  ): HttpTimeouts = {
     new HttpTimeouts(
       idle,
       head,
@@ -138,7 +155,9 @@ final class HttpTimeouts private (
       write,
       shutdownGrace
     )
+  }
 }
+
 object HttpTimeouts {
   def apply(
       idle: FiniteDuration = 15.seconds,
@@ -146,9 +165,11 @@ object HttpTimeouts {
       bodyRead: FiniteDuration = 30.seconds,
       write: FiniteDuration = 30.seconds,
       shutdownGrace: FiniteDuration = 5.seconds
-  ): HttpTimeouts =
+  ): HttpTimeouts = {
     new HttpTimeouts(idle, head, bodyRead, write, shutdownGrace)
+  }
 }
+
 final class ServerConfig private (
     val bindAddress: InetSocketAddress,
     val maxConnections: Int,
@@ -158,34 +179,41 @@ final class ServerConfig private (
   require(!bindAddress.isUnresolved, "Unresolved bind address")
   require(maxConnections > 0, "maxConnections must be positive")
 
-  def withBindAddress(value: InetSocketAddress): ServerConfig =
+  def withBindAddress(value: InetSocketAddress): ServerConfig = {
     copy(bindAddress = value)
-  def withMaxConnections(value: Int): ServerConfig =
+  }
+  def withMaxConnections(value: Int): ServerConfig = {
     copy(maxConnections = value)
-  def withLimits(value: HttpLimits): ServerConfig =
+  }
+  def withLimits(value: HttpLimits): ServerConfig = {
     copy(limits = value)
-  def withTimeouts(value: HttpTimeouts): ServerConfig =
+  }
+  def withTimeouts(value: HttpTimeouts): ServerConfig = {
     copy(timeouts = value)
+  }
 
   private def copy(
       bindAddress: InetSocketAddress = this.bindAddress,
       maxConnections: Int = this.maxConnections,
       limits: HttpLimits = this.limits,
       timeouts: HttpTimeouts = this.timeouts
-  ): ServerConfig =
+  ): ServerConfig = {
     new ServerConfig(
       bindAddress,
       maxConnections,
       limits,
       timeouts
     )
+  }
 }
+
 object ServerConfig {
   def apply(
       bindAddress: InetSocketAddress = new InetSocketAddress("127.0.0.1", 8080),
       maxConnections: Int = 128,
       limits: HttpLimits = HttpLimits(),
       timeouts: HttpTimeouts = HttpTimeouts()
-  ): ServerConfig =
+  ): ServerConfig = {
     new ServerConfig(bindAddress, maxConnections, limits, timeouts)
+  }
 }

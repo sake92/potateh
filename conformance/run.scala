@@ -27,15 +27,9 @@ object ConformanceRunner {
 
   @main
   def run(
-      @arg(doc =
-        "h1spec, http11probe, slowclients or slowhttptest"
-      ) suite: String,
-      @arg(doc =
-        "External suite checkout at the pinned commit; not needed for slowclients"
-      ) checkout: String = "",
-      @arg(doc =
-        "Server command; single/double quotes group arguments, no shell expansion"
-      ) server: String,
+      @arg(doc = "h1spec, http11probe, slowclients or slowhttptest") suite: String,
+      @arg(doc = "External suite checkout at the pinned commit; not needed for slowclients") checkout: String = "",
+      @arg(doc = "Server command; single/double quotes group arguments, no shell expansion") server: String,
       @arg(doc = "New results directory; must not exist") output: String,
       deno: String = "deno",
       dotnet: String = "dotnet",
@@ -43,26 +37,17 @@ object ConformanceRunner {
         name = "probe-dll",
         doc = "Built Http11Probe.Cli.dll"
       ) probeDll: Option[String] = None,
-      @arg(doc =
-        "Repeatable Http11Probe category; default: all core categories"
-      ) category: Seq[String] = Seq.empty,
-      @arg(doc =
-        "Maximum seconds per external probe invocation"
-      ) timeout: Double = 900,
-      @arg(doc =
-        "Slow-client admission: both, roomy or limited"
-      ) capacity: String = "both",
-      @arg(doc =
-        "Slow-client observation seconds, 3–30; idle-drip always runs 32 seconds"
-      ) duration: Int = 3,
+      @arg(doc = "Repeatable Http11Probe category; default: all core categories") category: Seq[String] = Seq.empty,
+      @arg(doc = "Maximum seconds per external probe invocation") timeout: Double = 900,
+      @arg(doc = "Slow-client admission: both, roomy or limited") capacity: String = "both",
+      @arg(doc = "Slow-client observation seconds, 3–30; idle-drip always runs 32 seconds") duration: Int = 3,
       @arg(
         name = "case",
         doc = "Repeatable slow-client scenario; omit to run all"
       ) cases: Seq[String] = Seq.empty,
       @arg(
         name = "idle-drip-expectation",
-        doc =
-          "32-second drip result: observe, close or survive; slowclients only"
+        doc = "32-second drip result: observe, close or survive; slowclients only"
       ) idleDripExpectation: String = "observe"
   ): Int = {
     try {
@@ -114,9 +99,7 @@ object ConformanceRunner {
         "--category requires --suite http11probe"
       )
       require(
-        suite != "http11probe" || probeDll.exists(p =>
-          Files.isRegularFile(Path.of(p))
-        ),
+        suite != "http11probe" || probeDll.exists(p => Files.isRegularFile(Path.of(p))),
         "--probe-dll must name a built Http11Probe.Cli.dll"
       )
       val command = Commandline.translateCommandline(server).toSeq
@@ -127,10 +110,10 @@ object ConformanceRunner {
         !Files.exists(destination),
         s"Results directory already exists: $destination; choose a new --output"
       )
-      val revision =
-        if (suite == "slowclients")
+      val revision = {
+        if (suite == "slowclients") {
           capture(Seq("git", "rev-parse", "HEAD")).trim
-        else {
+        } else {
           require(
             checkout.nonEmpty,
             "--checkout is required for external suites"
@@ -156,16 +139,18 @@ object ConformanceRunner {
             dirty.isEmpty,
             s"External suite has tracked modifications: $source; use an unchanged checkout"
           )
-          if (suite == "slowhttptest")
+          if (suite == "slowhttptest") {
             require(
               Files.isExecutable(source.resolve("src/slowhttptest")),
               "Build --checkout/src/slowhttptest first; see conformance/README.md"
             )
+          }
           found
         }
+      }
       Option(destination.getParent).foreach(Files.createDirectories(_))
       Files.createDirectory(destination)
-      if (slow)
+      if (slow) {
         SlowClients.run(
           suite,
           source,
@@ -178,7 +163,7 @@ object ConformanceRunner {
           revision,
           idleDripExpectation
         )
-      else
+      } else {
         execute(
           suite,
           source,
@@ -191,6 +176,7 @@ object ConformanceRunner {
           timeout,
           revision
         )
+      }
     } catch {
       case _: InterruptedException =>
         Thread.currentThread().interrupt()
@@ -284,8 +270,9 @@ object ConformanceRunner {
         )
         // This upstream CLI exits zero for failed probes; inspect the original JSON verdicts too.
         if (suite == "http11probe" && code == 0) {
-          val report =
+          val report = {
             ujson.read(Files.readString(destination.resolve(s"$name.json")))
+          }
           val failed = report("results").arr.count { result =>
             Set("Fail", "Error").contains(result("verdict").str)
           }
@@ -307,11 +294,12 @@ object ConformanceRunner {
       if (failed) 1 else 0
     } finally {
       try Children.stop(process)
-      finally
+      finally {
         Files.writeString(
           destination.resolve("run.json"),
           ujson.write(metadata, indent = 2) + "\n"
         )
+      }
     }
   }
 
@@ -338,9 +326,9 @@ object ConformanceRunner {
     val process = Children.start(command, log)
     try {
       val milliseconds = math.max(1L, (timeout * 1000).toLong)
-      if (process.waitFor(milliseconds, TimeUnit.MILLISECONDS))
+      if (process.waitFor(milliseconds, TimeUnit.MILLISECONDS)) {
         process.exitValue()
-      else 124
+      } else 124
     } finally Children.stop(process)
   }
 
@@ -388,8 +376,9 @@ object ConformanceRunner {
       if (!lock.synchronized(owned.contains(process))) return
       var interrupted = Thread.interrupted()
       def waitBounded(child: Process, milliseconds: Long): Boolean = {
-        val deadline =
+        val deadline = {
           System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(milliseconds)
+        }
         while (child.isAlive && System.nanoTime() < deadline) {
           val remaining = math.max(1L, deadline - System.nanoTime())
           try child.waitFor(remaining, TimeUnit.NANOSECONDS)
@@ -398,11 +387,12 @@ object ConformanceRunner {
         !child.isAlive
       }
       def signal(name: String): Unit = {
-        val sender =
+        val sender = {
           new ProcessBuilder("kill", s"-$name", "--", s"-${process.pid()}")
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
+        }
         if (!waitBounded(sender, 1000)) {
           sender.destroyForcibly()
           require(
@@ -425,4 +415,5 @@ object ConformanceRunner {
       }
     }
   }
+
 }

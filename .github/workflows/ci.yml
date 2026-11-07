@@ -11,6 +11,11 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: |
+          curl -fsSL https://github.com/scalameta/scalafmt/releases/download/v3.11.1/scalafmt-x86_64-pc-linux.zip -o "$RUNNER_TEMP/scalafmt.zip"
+          unzip -q "$RUNNER_TEMP/scalafmt.zip" -d "$RUNNER_TEMP/scalafmt"
+          chmod +x "$RUNNER_TEMP/scalafmt/scalafmt"
+          "$RUNNER_TEMP/scalafmt/scalafmt" --test
+      - run: |
           curl -fsSL https://github.com/sake92/deder/releases/download/v0.22.2/deder-client-linux-x86_64 -o "$RUNNER_TEMP/deder"
           chmod +x "$RUNNER_TEMP/deder"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"

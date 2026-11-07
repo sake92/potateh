@@ -22,7 +22,7 @@ private[potateh] final class Exchange(
   private val headers = Headers.from(head.headers)
   private val limits = config.limits
   private val framed: InputStream = head.framing match {
-    case RequestHeadParser.NoBody => new FixedLengthInputStream(input, 0)
+    case RequestHeadParser.NoBody              => new FixedLengthInputStream(input, 0)
     case RequestHeadParser.FixedLength(length) =>
       new FixedLengthInputStream(input, length)
     case RequestHeadParser.Chunked =>
@@ -54,10 +54,9 @@ private[potateh] final class Exchange(
     }
     override def read(): Int = consume(framed.read())
     override def read(bytes: Array[Byte], offset: Int, length: Int): Int = {
-      if (
-        offset < 0 || length < 0 || offset > bytes.length || length > bytes.length - offset
-      )
+      if (offset < 0 || length < 0 || offset > bytes.length || length > bytes.length - offset) {
         throw new IndexOutOfBoundsException()
+      }
       if (length == 0) { check(); 0 }
       else consume(framed.read(bytes, offset, length))
     }
@@ -65,8 +64,9 @@ private[potateh] final class Exchange(
     else consume(framed.skip(count))
     override def available(): Int = { check(); guard(framed.available()) }
     override def close(): Unit = { closed = true; framed.close() }
-    private def checkLifetime(): Unit =
+    private def checkLifetime(): Unit = {
       if (!live) throw new IOException("Request body escaped its exchange")
+    }
     private def check(): Unit = {
       checkLifetime()
       failure.foreach(throw _)
@@ -111,16 +111,16 @@ private[potateh] final class Exchange(
   def run(): Boolean = {
     try {
       head.framing match {
-        case RequestHeadParser.FixedLength(size)
-            if limits.bodyBytes.exists(size > _) =>
+        case RequestHeadParser.FixedLength(size) if limits.bodyBytes.exists(size > _) =>
           reject(413); return false
         case _ => ()
       }
       if (head.method == "CONNECT" || headers.first("Upgrade").nonEmpty) {
         reject(501); return false
       }
-      val expectations =
+      val expectations = {
         headers.all("Expect").flatMap(_.split(",", -1)).map(HttpSyntax.trimOws)
+      }
       if (
         expectations.nonEmpty && (head.version != "HTTP/1.1" || expectations
           .exists(!_.equalsIgnoreCase("100-continue")))
@@ -142,9 +142,10 @@ private[potateh] final class Exchange(
         (head.version == "HTTP/1.1" || options.exists(
           _.equalsIgnoreCase("keep-alive")
         ))
-      val version =
+      val version = {
         if (head.version == "HTTP/1.1") HttpVersion.Http11
         else HttpVersion.Http10
+      }
       val request = Request(
         head.method,
         head.target,
@@ -181,8 +182,9 @@ private[potateh] final class Exchange(
   }
   private def reject(code: Int): Unit = {
     if (!committed) {
-      val prepared =
+      val prepared = {
         ResponseHeadWriter.prepare("GET", head.version, Response(code), true)
+      }
       committed = true
       output.write(prepared.bytes)
       output.flush()

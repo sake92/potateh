@@ -4,8 +4,8 @@ import java.io.{EOFException, IOException, InputStream}
 import java.net.ProtocolException
 
 private[potateh] object ChunkedInputStream {
-  final class BodyTooLargeException
-      extends IOException("Request body exceeds configured limit")
+
+  final class BodyTooLargeException extends IOException("Request body exceeds configured limit")
 
   final case class Limits(
       chunkLineBytes: Int = 8192,
@@ -20,11 +20,11 @@ private[potateh] object ChunkedInputStream {
     require(trailerSectionBytes >= 2, "trailerSectionBytes must be at least 2")
     require(trailerCount >= 0, "trailerCount must be at least 0")
   }
+
 }
 
-/** Decodes a body on a caller-owned connection stream. Extensions and trailers
-  * are validated; trailers remain separate from initial headers. Close does not
-  * drain or close the source.
+/** Decodes a body on a caller-owned connection stream. Extensions and trailers are validated; trailers remain separate
+  * from initial headers. Close does not drain or close the source.
   */
 private[potateh] final class ChunkedInputStream(
     private val input: InputStream,
@@ -44,8 +44,9 @@ private[potateh] final class ChunkedInputStream(
 
   private var trailerFields = ba.sake.potateh.Headers.empty
   def terminalFailure: Option[IOException] = failure
-  def trailers: Option[ba.sake.potateh.Headers] =
+  def trailers: Option[ba.sake.potateh.Headers] = {
     Option.when(isComplete)(trailerFields)
+  }
 
   def isComplete: Boolean = complete && failure.isEmpty
 
@@ -61,10 +62,9 @@ private[potateh] final class ChunkedInputStream(
 
   override def read(buffer: Array[Byte], offset: Int, length: Int): Int = {
     if (buffer == null) throw new NullPointerException("buffer")
-    if (
-      offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset
-    )
+    if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
+    }
     checkReadable()
     if (length == 0) return 0
     try {
@@ -115,13 +115,15 @@ private[potateh] final class ChunkedInputStream(
     }
     if (index == 0) invalid("Missing chunk size")
     val extra = line.length - index
-    if (extra > limits.extensionBytes - extensionBytes)
+    if (extra > limits.extensionBytes - extensionBytes) {
       invalid("Too much chunk extension text")
+    }
     extensionBytes += extra
     validateExtensions(line, index)
     if (maxBodyBytes.nonEmpty) {
-      if (size > bodyBudget)
+      if (size > bodyBudget) {
         throw new ChunkedInputStream.BodyTooLargeException()
+      }
       bodyBudget -= size
     }
     remaining = size
@@ -139,12 +141,14 @@ private[potateh] final class ChunkedInputStream(
     var index = start
     while (index < line.length) {
       index = skipOws(line, index)
-      if (index == line.length || line.charAt(index) != ';')
+      if (index == line.length || line.charAt(index) != ';') {
         invalid("Invalid chunk extension")
+      }
       index = skipOws(line, index + 1)
       val nameStart = index
-      while (index < line.length && HttpSyntax.isToken(line.charAt(index)))
+      while (index < line.length && HttpSyntax.isToken(line.charAt(index))) {
         index += 1
+      }
       if (index == nameStart) invalid("Missing chunk extension name")
       val equals = skipOws(line, index)
       if (equals < line.length && line.charAt(equals) == '=') {
@@ -158,17 +162,20 @@ private[potateh] final class ChunkedInputStream(
             index += 1
             if (character == '"') ended = true
             else if (character == '\\') {
-              if (index == line.length || !quotedCharacter(line.charAt(index)))
+              if (index == line.length || !quotedCharacter(line.charAt(index))) {
                 invalid("Invalid quoted escape")
+              }
               index += 1
-            } else if (!quotedCharacter(character))
+            } else if (!quotedCharacter(character)) {
               invalid("Invalid quoted extension")
+            }
           }
           if (!ended) invalid("Unterminated quoted extension")
         } else {
           val valueStart = index
-          while (index < line.length && HttpSyntax.isToken(line.charAt(index)))
+          while (index < line.length && HttpSyntax.isToken(line.charAt(index))) {
             index += 1
+          }
           if (index == valueStart) invalid("Invalid chunk extension value")
         }
       }
@@ -189,8 +196,9 @@ private[potateh] final class ChunkedInputStream(
       if (line.isEmpty) ended = true
       else {
         if (count == limits.trailerCount) invalid("Too many trailer fields")
-        val field =
+        val field = {
           HttpSyntax.field(line).getOrElse(invalid("Invalid trailer field"))
+        }
         fields += field
         count += 1
       }
@@ -212,8 +220,9 @@ private[potateh] final class ChunkedInputStream(
   }
 
   private def expectCrlf(): Unit = {
-    if (readByte() != '\r' || readByte() != '\n')
+    if (readByte() != '\r' || readByte() != '\n') {
       invalid("Missing chunk data CRLF")
+    }
   }
 
   private def readByte(): Int = {
@@ -231,14 +240,16 @@ private[potateh] final class ChunkedInputStream(
     index
   }
 
-  private def hexDigit(c: Char): Int =
+  private def hexDigit(c: Char): Int = {
     if (c >= '0' && c <= '9') c - '0'
     else if (c >= 'a' && c <= 'f') c - 'a' + 10
     else if (c >= 'A' && c <= 'F') c - 'A' + 10
     else -1
+  }
 
-  private def quotedCharacter(c: Char): Boolean =
+  private def quotedCharacter(c: Char): Boolean = {
     c == '\t' || (c >= ' ' && c != 127)
+  }
 
   private def invalid(message: String): Nothing = throw new ProtocolException(
     message

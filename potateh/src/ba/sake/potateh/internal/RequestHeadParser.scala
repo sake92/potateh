@@ -5,13 +5,17 @@ import java.net.{URI, URISyntaxException}
 
 import HttpSyntax.{isToken, trimOws}
 
-/** Strict HTTP/1.x head parsing. The caller owns and reuses the input stream.
-  * After a parse failure the connection must be closed, not parsed again.
+/** Strict HTTP/1.x head parsing. The caller owns and reuses the input stream. After a parse failure the connection must
+  * be closed, not parsed again.
   */
 private[potateh] object RequestHeadParser {
+
   sealed trait BodyFraming
+
   case object NoBody extends BodyFraming
+
   final case class FixedLength(length: Long) extends BodyFraming
+
   case object Chunked extends BodyFraming
 
   final case class Limits(
@@ -34,12 +38,10 @@ private[potateh] object RequestHeadParser {
       framing: BodyFraming
   )
 
-  final class ParseException(val responseCode: Int, message: String)
-      extends IOException(message)
+  final class ParseException(val responseCode: Int, message: String) extends IOException(message)
 
-  /** None means EOF before any request bytes. Limits count wire octets: line
-    * limits exclude CRLF; section limits include every CRLF and the final blank
-    * line.
+  /** None means EOF before any request bytes. Limits count wire octets: line limits exclude CRLF; section limits
+    * include every CRLF and the final blank line.
     */
   def read(
       input: InputStream,
@@ -47,20 +49,24 @@ private[potateh] object RequestHeadParser {
   ): Option[RequestHead] = {
     val first = input.read()
     if (first == -1) return None
-    val line =
+    val line = {
       readLine(input, first, limits.requestLineBytes, 414, requestLine = true)
+    }
     val firstSpace = line.indexOf(' ')
     val lastSpace = line.lastIndexOf(' ')
-    if (firstSpace <= 0 || lastSpace <= firstSpace + 1)
+    if (firstSpace <= 0 || lastSpace <= firstSpace + 1) {
       fail(400, "Invalid request line")
+    }
     val method = line.substring(0, firstSpace)
     val target = line.substring(firstSpace + 1, lastSpace)
     val version = line.substring(lastSpace + 1)
     if (!method.forall(isToken)) fail(400, "Invalid method")
-    if (!version.matches("HTTP/[0-9]\\.[0-9]"))
+    if (!version.matches("HTTP/[0-9]\\.[0-9]")) {
       fail(400, "Invalid HTTP version")
-    if (version != "HTTP/1.0" && version != "HTTP/1.1")
+    }
+    if (version != "HTTP/1.0" && version != "HTTP/1.1") {
       fail(505, "Unsupported HTTP version")
+    }
     validateTarget(method, target)
 
     val fields = Vector.newBuilder[(String, String)]
@@ -76,16 +82,18 @@ private[potateh] object RequestHeadParser {
       if (field.isEmpty) done = true
       else {
         if (count == limits.headerCount) fail(431, "Too many header fields")
-        val parsed =
+        val parsed = {
           HttpSyntax.field(field).getOrElse(fail(400, "Invalid header field"))
+        }
         fields += parsed
         count += 1
       }
     }
     val headers = fields.result()
     val hosts = values(headers, "Host")
-    if (hosts.size > 1 || (version == "HTTP/1.1" && hosts.isEmpty))
+    if (hosts.size > 1 || (version == "HTTP/1.1" && hosts.isEmpty)) {
       fail(400, "Missing or repeated Host")
+    }
     hosts.foreach(validateHost)
     val framing = selectFraming(headers, version)
     Some(RequestHead(method, target, version, headers, framing))
@@ -104,8 +112,9 @@ private[potateh] object RequestHeadParser {
       if (next == -1) fail(400, "Truncated request head")
       if (next == '\n') fail(400, "Bare LF in request head")
       if (result.length() == maximum) {
-        if (requestLine && result.indexOf(" ") < 0)
+        if (requestLine && result.indexOf(" ") < 0) {
           fail(501, "Request method too long")
+        }
         fail(errorCode, "Request head line too long")
       }
       result.append(next.toChar)
@@ -121,18 +130,21 @@ private[potateh] object RequestHeadParser {
   ): BodyFraming = {
     val lengths = values(headers, "Content-Length")
     val encodings = values(headers, "Transfer-Encoding")
-    if (lengths.nonEmpty && encodings.nonEmpty)
+    if (lengths.nonEmpty && encodings.nonEmpty) {
       fail(400, "Conflicting body framing")
+    }
     if (encodings.nonEmpty) {
       if (version == "HTTP/1.0") fail(400, "Transfer-Encoding on HTTP/1.0")
       val codings = encodings.flatMap(_.split(",", -1)).map(trimOws)
-      if (codings.exists(c => c.isEmpty || !c.forall(isToken)))
+      if (codings.exists(c => c.isEmpty || !c.forall(isToken))) {
         fail(400, "Invalid transfer coding")
+      }
       if (
         !codings.last.equalsIgnoreCase("chunked") ||
         codings.count(_.equalsIgnoreCase("chunked")) != 1
-      )
+      ) {
         fail(400, "Chunked must occur exactly once, last")
+      }
       if (codings.size != 1) fail(501, "Unsupported transfer coding")
       Chunked
     } else if (lengths.nonEmpty) {
@@ -143,8 +155,9 @@ private[potateh] object RequestHeadParser {
       value.foreach { c =>
         if (c < '0' || c > '9') fail(400, "Invalid Content-Length")
         val digit = c - '0'
-        if (length > (Long.MaxValue - digit) / 10)
+        if (length > (Long.MaxValue - digit) / 10) {
           fail(400, "Content-Length overflow")
+        }
         length = length * 10 + digit
       }
       FixedLength(length)
@@ -152,8 +165,9 @@ private[potateh] object RequestHeadParser {
   }
 
   private def validateTarget(method: String, target: String): Unit = {
-    if (!target.forall(c => c > ' ' && c < 127) || target.indexOf('#') >= 0)
+    if (!target.forall(c => c > ' ' && c < 127) || target.indexOf('#') >= 0) {
       fail(400, "Invalid request target")
+    }
     if (target == "*") {
       if (method != "OPTIONS") fail(400, "Asterisk target requires OPTIONS")
     } else if (method == "CONNECT") {
@@ -164,8 +178,9 @@ private[potateh] object RequestHeadParser {
         Option(uri.getRawQuery()).nonEmpty || Option(
           uri.getRawUserInfo()
         ).nonEmpty
-      )
+      ) {
         fail(400, "Invalid CONNECT authority")
+      }
     } else if (target.startsWith("/")) {
       // Prefixing an authority keeps a leading // in the path, rather than
       // letting URI reinterpret it as an authority. Preserve the raw target.
@@ -177,8 +192,9 @@ private[potateh] object RequestHeadParser {
           uri.getScheme()
         )) ||
         Option(uri.getHost()).isEmpty || Option(uri.getRawUserInfo()).nonEmpty
-      )
+      ) {
         fail(400, "Invalid absolute request target")
+      }
     }
   }
 
@@ -193,21 +209,25 @@ private[potateh] object RequestHeadParser {
         uri.getRawPath() != "" || Option(uri.getRawQuery()).nonEmpty || Option(
           uri.getRawFragment()
         ).nonEmpty
-      )
+      ) {
         fail(400, "Invalid Host")
+      }
     }
   }
 
-  private def parseUri(value: String): URI =
+  private def parseUri(value: String): URI = {
     try new URI(value)
     catch { case _: URISyntaxException => fail(400, "Invalid URI syntax") }
+  }
 
   private def values(
       headers: Vector[(String, String)],
       name: String
-  ): Vector[String] =
+  ): Vector[String] = {
     headers.collect { case (key, value) if key.equalsIgnoreCase(name) => value }
+  }
 
-  private def fail(code: Int, message: String): Nothing =
+  private def fail(code: Int, message: String): Nothing = {
     throw new ParseException(code, message)
+  }
 }

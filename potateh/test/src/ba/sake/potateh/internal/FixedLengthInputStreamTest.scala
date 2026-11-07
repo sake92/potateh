@@ -1,12 +1,6 @@
 package ba.sake.potateh.internal
 
-import java.io.{
-  BufferedInputStream,
-  ByteArrayInputStream,
-  EOFException,
-  IOException,
-  InputStream
-}
+import java.io.{BufferedInputStream, ByteArrayInputStream, EOFException, IOException, InputStream}
 import java.nio.charset.StandardCharsets.ISO_8859_1
 
 class FixedLengthInputStreamTest extends munit.FunSuite {
@@ -33,8 +27,9 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
     val source = new ByteArrayInputStream(
       (payload + "GET / HTTP/1.0\r\n\r\n").getBytes(ISO_8859_1)
     ) {
-      override def read(b: Array[Byte], off: Int, len: Int): Int =
+      override def read(b: Array[Byte], off: Int, len: Int): Int = {
         super.read(b, off, math.min(len, 2))
+      }
     }
     val input = new BufferedInputStream(source, 5)
     try {
@@ -55,10 +50,12 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
 
   test("emptyBodiesAndZeroLengthReadsDoNotConsumeSource") {
     val source = new InputStream {
-      override def read(): Int =
+      override def read(): Int = {
         throw new AssertionError("Source must not be read")
-      override def available(): Int =
+      }
+      override def available(): Int = {
         throw new AssertionError("Source must not be probed")
+      }
     }
     val empty = new FixedLengthInputStream(source, 0)
     assert(empty.isComplete)
@@ -108,13 +105,16 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
   }
 
   test("skipIsBoundedAndHandlesShortReads") {
-    val source =
+    val source = {
       new ByteArrayInputStream(("a" * 5000 + "zNEXT").getBytes(ISO_8859_1)) {
-        override def read(b: Array[Byte], off: Int, len: Int): Int =
+        override def read(b: Array[Byte], off: Int, len: Int): Int = {
           super.read(b, off, math.min(len, 3))
-        override def skip(count: Long): Long =
+        }
+        override def skip(count: Long): Long = {
           throw new AssertionError("Must verify skipped body bytes")
+        }
       }
+    }
     val body = new FixedLengthInputStream(source, 5001)
     assertEquals(body.skip(Long.MinValue), 0L)
     assertEquals(body.skip(5000), 5000L)
@@ -257,6 +257,7 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
     assert(body.isComplete)
   }
 
-  private def stream(value: String): ByteArrayInputStream =
+  private def stream(value: String): ByteArrayInputStream = {
     new ByteArrayInputStream(value.getBytes(ISO_8859_1))
+  }
 }

@@ -3,8 +3,8 @@ package ba.sake.potateh.internal
 import java.io.{IOException, OutputStream}
 import java.nio.charset.StandardCharsets.US_ASCII
 
-/** Emits one chunk per nonempty write on a caller-owned connection stream.
-  * Close terminates the body and flushes without closing the sink.
+/** Emits one chunk per nonempty write on a caller-owned connection stream. Close terminates the body and flushes
+  * without closing the sink.
   */
 private[potateh] final class ChunkedOutputStream(
     private val output: OutputStream
@@ -31,10 +31,9 @@ private[potateh] final class ChunkedOutputStream(
 
   override def write(buffer: Array[Byte], offset: Int, length: Int): Unit = {
     if (buffer == null) throw new NullPointerException("buffer")
-    if (
-      offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset
-    )
+    if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
+    }
     checkWritable()
     if (length == 0) return
     val header = (Integer.toHexString(length) + "\r\n").getBytes(US_ASCII)

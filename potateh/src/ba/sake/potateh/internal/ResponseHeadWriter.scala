@@ -5,11 +5,16 @@ import java.io.OutputStream
 import java.nio.charset.StandardCharsets.ISO_8859_1
 
 private[potateh] object ResponseHeadWriter {
+
   enum Framing {
     case NoBody, Chunked, CloseDelimited
+
     case FixedLength(length: Long)
+
   }
+
   import Framing.*
+
   final case class Prepared(
       bytes: Array[Byte],
       framing: Framing,
@@ -55,30 +60,34 @@ private[potateh] object ResponseHeadWriter {
     val size = length(response.body)
     val forbidden = status == 204
     val metadata = method == "HEAD" || status == 304
-    val framing =
+    val framing = {
       if (forbidden || metadata || status == 205) NoBody
-      else
+      else {
         size match {
           case Some(value)                   => FixedLength(value)
           case None if version == "HTTP/1.1" => Chunked
           case None                          => CloseDelimited
         }
+      }
+    }
     val closes = close || framing == CloseDelimited
     var headers = response.headers
-    if (headers.first("Date").isEmpty)
+    if (headers.first("Date").isEmpty) {
       headers = headers.add("Date", httpDate(System.currentTimeMillis()))
+    }
     if (!forbidden) {
       if (status == 205) headers = headers.add("Content-Length", "0")
-      else
-        size.foreach(value =>
-          headers = headers.add("Content-Length", value.toString)
-        )
+      else {
+        size.foreach(value => headers = headers.add("Content-Length", value.toString))
+      }
     }
-    if (framing == Chunked)
+    if (framing == Chunked) {
       headers = headers.add("Transfer-Encoding", "chunked")
+    }
     if (closes) headers = headers.add("Connection", "close")
-    else if (version == "HTTP/1.0")
+    else if (version == "HTTP/1.0") {
       headers = headers.add("Connection", "keep-alive")
+    }
     val head = new StringBuilder
     head
       .append(version)
@@ -116,15 +125,17 @@ private[potateh] object ResponseHeadWriter {
           ): Unit = { check(); output.write(bytes, offset, length) }
           override def flush(): Unit = { check(); output.flush() }
           override def close(): Unit = { closed = true; output.flush() }
-          private def check(): Unit =
+          private def check(): Unit = {
             if (closed) throw new java.io.IOException("Response body is closed")
+          }
         }
       case NoBody => throw new IllegalStateException()
     }
     var live = true
     val scoped = new OutputStream {
-      private def check(): Unit = if (!live)
+      private def check(): Unit = if (!live) {
         throw new java.io.IOException("Response body escaped its exchange")
+      }
       override def write(value: Int): Unit = { check(); stream.write(value) }
       override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
         check(); stream.write(bytes, offset, length)
@@ -197,13 +208,15 @@ private[potateh] object ResponseHeadWriter {
     s"$weekday, $day $monthName $yearText $hour:$minute:$second GMT"
   }
 
-  private def isLeapYear(year: Int): Boolean =
+  private def isLeapYear(year: Int): Boolean = {
     year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+  }
 
   private def daysInYear(year: Int): Int = if (isLeapYear(year)) 366 else 365
 
-  private def twoDigits(value: Int): String =
+  private def twoDigits(value: Int): String = {
     if (value < 10) "0" + value else value.toString
+  }
 
   private def reason(status: Int): String = status match {
     case 100 => "Continue"

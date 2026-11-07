@@ -1,20 +1,9 @@
 package ba.sake.potateh
 
 import java.io.{ByteArrayOutputStream, IOException, InputStream, OutputStream}
-import java.net.{
-  InetSocketAddress,
-  Socket,
-  SocketException,
-  SocketTimeoutException
-}
+import java.net.{InetSocketAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.ISO_8859_1
-import java.util.concurrent.{
-  CountDownLatch,
-  Executor,
-  Executors,
-  RejectedExecutionException,
-  TimeUnit
-}
+import java.util.concurrent.{CountDownLatch, Executor, Executors, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.concurrent.duration.*
 
@@ -31,8 +20,9 @@ class ServerTest extends munit.FunSuite {
       shutdownGrace = 1.second
     )
   )
-  private def response(text: String): Response =
+  private def response(text: String): Response = {
     Response(body = ResponseBody.bytes(text.getBytes(ISO_8859_1)))
+  }
   private def withServer[A](
       settings: ServerConfig = config
   )(handle: Request => Response)(test: Server => A): A = {
@@ -55,15 +45,18 @@ class ServerTest extends munit.FunSuite {
     val out = new StringBuilder
     var byte = input.read()
     while (byte != '\r') {
-      if (byte == -1 || byte == '\n')
+      if (byte == -1 || byte == '\n') {
         throw new IOException("Truncated or malformed response")
+      }
       out.append(byte.toChar)
       byte = input.read()
     }
     if (input.read() != '\n') throw new IOException("Bad CRLF")
     out.toString
   }
+
   private case class Received(status: Int, headers: Headers, body: String)
+
   private def receive(socket: Socket, headOnly: Boolean = false): Received = {
     val input = socket.getInputStream
     val status = line(input).split(" ")(1).toInt
@@ -89,13 +82,14 @@ class ServerTest extends munit.FunSuite {
           size = Integer.parseInt(line(input), 16)
         }
         assertEquals(line(input), "")
-      } else
+      } else {
         headers.first("Content-Length") match {
           case Some(size) => fixed(size.toInt)
           case None       =>
             var byte = input.read()
             while (byte != -1) { out.write(byte); byte = input.read() }
         }
+      }
     }
     Received(status, headers, new String(out.toByteArray, ISO_8859_1))
   }
@@ -103,8 +97,9 @@ class ServerTest extends munit.FunSuite {
       target: String = "/",
       version: String = "HTTP/1.1",
       fields: String = ""
-  ): String =
+  ): String = {
     s"GET $target $version\r\nHost: localhost\r\n$fields\r\n"
+  }
   private def closed(socket: Socket): Unit = {
     val actual = try socket.getInputStream.read()
     catch { case _: SocketException => -1 }
@@ -163,8 +158,9 @@ class ServerTest extends munit.FunSuite {
     val submissions = new AtomicInteger
     val pool = Executors.newSingleThreadExecutor()
     val executor: Executor = task => {
-      if (submissions.getAndIncrement() == 0)
+      if (submissions.getAndIncrement() == 0) {
         throw new RejectedExecutionException("saturated")
+      }
       pool.execute(task)
     }
     val server = Server.start(config.withMaxConnections(1), executor)(_ => response("ok"))
@@ -358,11 +354,9 @@ class ServerTest extends munit.FunSuite {
     withServer() { request =>
       request.body.transferTo(new ByteArrayOutputStream)
       val n = calls.incrementAndGet()
-      if (n == 2)
-        Response(body =
-          ResponseBody.Writer()(out => out.write("two".getBytes(ISO_8859_1)))
-        )
-      else response(n.toString)
+      if (n == 2) {
+        Response(body = ResponseBody.Writer()(out => out.write("two".getBytes(ISO_8859_1))))
+      } else response(n.toString)
     } { server =>
       withSocket(server) { socket =>
         send(
@@ -403,9 +397,7 @@ class ServerTest extends munit.FunSuite {
         assertEquals(receive(socket).body, "ok"); closed(socket)
       }
     }
-    withServer()(_ =>
-      Response(body = ResponseBody.Writer()(out => out.write('x')))
-    ) { server =>
+    withServer()(_ => Response(body = ResponseBody.Writer()(out => out.write('x')))) { server =>
       withSocket(server) { socket =>
         send(socket, get(version = "HTTP/1.0")); val actual = receive(socket)
         assertEquals(actual.body, "x");
@@ -468,17 +460,16 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (mode <- List("single", "bulk", "skip")) {
       val calls = new AtomicInteger
-      withServer(config.withLimits(HttpLimits(bodyBytes = Some(3)))) {
-        request =>
-          calls.incrementAndGet()
-          try
-            mode match {
-              case "single" => while (request.body.read() != -1) ()
-              case "bulk" => request.body.transferTo(new ByteArrayOutputStream)
-              case _      => request.body.skip(100)
-            }
-          catch { case _: IOException => () }
-          response("wrong")
+      withServer(config.withLimits(HttpLimits(bodyBytes = Some(3)))) { request =>
+        calls.incrementAndGet()
+        try {
+          mode match {
+            case "single" => while (request.body.read() != -1) ()
+            case "bulk"   => request.body.transferTo(new ByteArrayOutputStream)
+            case _        => request.body.skip(100)
+          }
+        } catch { case _: IOException => () }
+        response("wrong")
       } { server =>
         withSocket(server) { socket =>
           send(
@@ -538,9 +529,7 @@ class ServerTest extends munit.FunSuite {
       for (
         (wire, code) <- List(
           "GET / HTTP/1.1\r\n\r\n" -> 400,
-          get(fields =
-            "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n"
-          ) -> 400,
+          get(fields = "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n") -> 400,
           "GET / HTTP/1.1\nHost: x\r\n\r\n" -> 400,
           get(fields = "Upgrade: websocket\r\nConnection: upgrade\r\n") -> 501,
           "CONNECT example.org:443 HTTP/1.1\r\nHost: x\r\n\r\n" -> 501
@@ -560,8 +549,9 @@ class ServerTest extends munit.FunSuite {
   test("HEAD and bodyless status writers are never invoked over real sockets") {
     val invoked = new AtomicInteger
     withServer() { request =>
-      val status =
+      val status = {
         if (request.target == "/") 200 else request.target.drop(1).toInt
+      }
       Response(
         status,
         body = ResponseBody.Writer(Some(3))(_ => {
@@ -593,8 +583,9 @@ class ServerTest extends munit.FunSuite {
     "callback failures and invalid response framing produce 500 before commitment"
   ) {
     withServer() { request =>
-      if (request.target == "/throw")
+      if (request.target == "/throw") {
         throw new IllegalStateException("callback")
+      }
       Response(headers = Headers("Content-Length" -> "999"))
     } { server =>
       for (target <- List("/throw", "/conflict")) withSocket(server) { socket =>
@@ -608,22 +599,21 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (mode <- List("underflow", "overflow", "throw", "body-failure")) {
       val calls = new AtomicInteger
-      withServer(config.withLimits(HttpLimits(bodyBytes = Some(1)))) {
-        request =>
-          calls.incrementAndGet()
-          Response(body = ResponseBody.Writer(Some(2)) { out =>
-            out.write('x'); out.flush()
-            mode match {
-              case "underflow" => ()
-              case "overflow"  =>
-                try out.write(Array[Byte](1, 2))
-                catch { case _: IOException => () }
-              case "throw" => throw new IllegalStateException("writer")
-              case _       =>
-                try request.body.transferTo(out)
-                catch { case _: IOException => () }
-            }
-          })
+      withServer(config.withLimits(HttpLimits(bodyBytes = Some(1)))) { request =>
+        calls.incrementAndGet()
+        Response(body = ResponseBody.Writer(Some(2)) { out =>
+          out.write('x'); out.flush()
+          mode match {
+            case "underflow" => ()
+            case "overflow"  =>
+              try out.write(Array[Byte](1, 2))
+              catch { case _: IOException => () }
+            case "throw" => throw new IllegalStateException("writer")
+            case _       =>
+              try request.body.transferTo(out)
+              catch { case _: IOException => () }
+          }
+        })
       } { server =>
         withSocket(server) { socket =>
           send(
@@ -672,18 +662,17 @@ class ServerTest extends munit.FunSuite {
   test(
     "initial and subsequent heads have absolute deadlines despite byte trickling"
   ) {
-    for (subsequent <- List(false, true)) withServer()(_ => response("ok")) {
-      server =>
-        withSocket(server) { socket =>
-          if (subsequent) {
-            send(socket, get()); assertEquals(receive(socket).body, "ok")
-          }
-          send(socket, "G")
-          Thread.sleep(150); send(socket, "E")
-          Thread.sleep(150); send(socket, "T")
-          Thread.sleep(250)
-          assertEquals(receive(socket).status, 408); closed(socket)
+    for (subsequent <- List(false, true)) withServer()(_ => response("ok")) { server =>
+      withSocket(server) { socket =>
+        if (subsequent) {
+          send(socket, get()); assertEquals(receive(socket).body, "ok")
         }
+        send(socket, "G")
+        Thread.sleep(150); send(socket, "E")
+        Thread.sleep(150); send(socket, "T")
+        Thread.sleep(250)
+        assertEquals(receive(socket).status, 408); closed(socket)
+      }
     }
   }
   test(
@@ -718,13 +707,13 @@ class ServerTest extends munit.FunSuite {
       if (request.target == "/hold") { entered.countDown(); await(release) }
       response("ok")
     } { server =>
-      try
+      try {
         withSocket(server) { first =>
           send(first, get("/hold")); await(entered)
           withSocket(server)(closed)
           release.countDown(); assertEquals(receive(first).body, "ok")
         }
-      finally release.countDown()
+      } finally release.countDown()
       eventually() {
         withSocket(server) { socket =>
           send(socket, get()); assertEquals(receive(socket).body, "ok")
@@ -752,7 +741,7 @@ class ServerTest extends munit.FunSuite {
     val finished = new CountDownLatch(1)
     withServer(config.withMaxConnections(1)) { request =>
       if (request.target != "/large") response("ok")
-      else
+      else {
         Response(body = ResponseBody.Writer() { out =>
           started.countDown()
           try {
@@ -760,6 +749,7 @@ class ServerTest extends munit.FunSuite {
             (0 until 4096).foreach(_ => out.write(block))
           } finally finished.countDown()
         })
+      }
     } { server =>
       withSocket(server) { socket =>
         socket.setReceiveBufferSize(1024); send(socket, get("/large"));
@@ -782,7 +772,7 @@ class ServerTest extends munit.FunSuite {
       calls.incrementAndGet(); entered.countDown(); await(release);
       response("ok")
     }
-    try
+    try {
       withSocket(server) { socket =>
         send(socket, get() + get()); await(entered)
         val stopped = new CountDownLatch(1)
@@ -795,7 +785,7 @@ class ServerTest extends munit.FunSuite {
         await(stopped); stop.join(1000); assert(!stop.isAlive);
         assertEquals(calls.get(), 1)
       }
-    finally { release.countDown(); server.stop() }
+    } finally { release.countDown(); server.stop() }
   }
   test(
     "forced shutdown unblocks body reads within one grace budget and concurrent stop is idempotent"
@@ -811,7 +801,7 @@ class ServerTest extends munit.FunSuite {
       finally ended.countDown();
       response("ok")
     }
-    try
+    try {
       withSocket(server) { socket =>
         send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\n\r\n");
         await(entered)
@@ -822,7 +812,7 @@ class ServerTest extends munit.FunSuite {
         assert((System.nanoTime() - start).nanos < 1500.millis)
         await(ended); closed(socket); server.stop()
       }
-    finally server.stop()
+    } finally server.stop()
   }
   test(
     "callback stop and callback stop racing an external stop do not self-join"
@@ -837,7 +827,7 @@ class ServerTest extends munit.FunSuite {
         returned.countDown(); response("ok")
       }
       ref.set(server)
-      try
+      try {
         withSocket(server) { socket =>
           send(socket, get()); await(entered)
           val stopper = new Thread(() => server.stop())
@@ -847,7 +837,7 @@ class ServerTest extends munit.FunSuite {
           if (external) assertEquals(receive(socket).body, "ok")
           closed(socket)
         }
-      finally { proceed.countDown(); server.stop() }
+      } finally { proceed.countDown(); server.stop() }
     }
   }
   test("stop closes idle sockets and releases the bound port") {
@@ -855,8 +845,9 @@ class ServerTest extends munit.FunSuite {
     val address = server.address
     try withSocket(server) { socket => server.stop(); closed(socket) }
     finally server.stop()
-    val rebound =
+    val rebound = {
       Server.start(config.withBindAddress(address))(_ => response("new"))
+    }
     rebound.stop()
   }
   private def eventually()(assertion: => Unit): Unit = {
@@ -874,22 +865,23 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (limit <- List(Some(3L), None)) {
       val payload = if (limit.nonEmpty) "abc" else "x" * (1024 * 1024 + 1)
-      withServer(config.withLimits(HttpLimits(bodyBytes = limit))) {
-        request =>
-          val sink = new ByteArrayOutputStream
-          request.body.transferTo(sink)
-          response(sink.size().toString)
+      withServer(config.withLimits(HttpLimits(bodyBytes = limit))) { request =>
+        val sink = new ByteArrayOutputStream
+        request.body.transferTo(sink)
+        response(sink.size().toString)
       } { server =>
         for (chunked <- List(false, true)) withSocket(server) { socket =>
-          val fields =
+          val fields = {
             if (chunked) "Transfer-Encoding: chunked\r\n"
             else s"Content-Length: ${payload.length}\r\n"
-          val wire =
-            if (chunked)
+          }
+          val wire = {
+            if (chunked) {
               Integer.toHexString(
                 payload.length
               ) + "\r\n" + payload + "\r\n0\r\n\r\n"
-            else payload
+            } else payload
+          }
           send(
             socket,
             "POST / HTTP/1.1\r\nHost: x\r\n" + fields + "\r\n" + wire + get(
@@ -903,13 +895,10 @@ class ServerTest extends munit.FunSuite {
     }
   }
   test("Some zero permits empty bodies and rejects chunked payloads") {
-    withServer(config.withLimits(HttpLimits(bodyBytes = Some(0)))) {
-      request =>
-        request.body.transferTo(new ByteArrayOutputStream); response("ok")
+    withServer(config.withLimits(HttpLimits(bodyBytes = Some(0)))) { request =>
+      request.body.transferTo(new ByteArrayOutputStream); response("ok")
     } { server =>
-      for (
-        (wire, code) <- List("0\r\n\r\n" -> 200, "1\r\nx\r\n0\r\n\r\n" -> 413)
-      ) withSocket(server) { socket =>
+      for ((wire, code) <- List("0\r\n\r\n" -> 200, "1\r\nx\r\n0\r\n\r\n" -> 413)) withSocket(server) { socket =>
         send(
           socket,
           "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n" + wire
@@ -961,19 +950,17 @@ class ServerTest extends munit.FunSuite {
         } finally ended.countDown()
       })
     }
-    try
+    try {
       withSocket(server) { socket =>
         socket.setReceiveBufferSize(1024); send(socket, get()); await(started)
         server.stop(); await(ended)
       }
-    finally server.stop()
+    } finally server.stop()
   }
   test("failed bind cleans up without affecting the existing server") {
     withServer()(_ => response("ok")) { server =>
       intercept[IOException](
-        Server.start(config.withBindAddress(server.address))(_ =>
-          response("wrong")
-        )
+        Server.start(config.withBindAddress(server.address))(_ => response("wrong"))
       )
       withSocket(server) { socket =>
         send(socket, get()); assertEquals(receive(socket).body, "ok")
@@ -991,7 +978,7 @@ class ServerTest extends munit.FunSuite {
       calls.incrementAndGet(); entered.countDown(); await(release);
       response("ok")
     } { server =>
-      try
+      try {
         withSocket(server) { first =>
           withSocket(server) { second =>
             send(first, get()); send(second, get()); await(entered)
@@ -1002,7 +989,7 @@ class ServerTest extends munit.FunSuite {
             assertEquals(receive(second).body, "ok")
           }
         }
-      finally release.countDown()
+      } finally release.countDown()
     }
   }
 }
