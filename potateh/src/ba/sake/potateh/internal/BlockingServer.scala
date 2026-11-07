@@ -16,26 +16,52 @@ import java.net.{
 }
 import scala.collection.mutable
 import scala.util.control.NonFatal
+import java.util.concurrent.{
+  Executor,
+  Executors,
+  RejectedExecutionException,
+  TimeUnit
+}
 
-/** One platform worker per admitted connection; no accepted-socket work queue.
-  */
+/** One executor task per admitted connection, including queued connections. */
 private[potateh] final class BlockingServer(
     listener: ServerSocket,
     config: ServerConfig,
+    suppliedExecutor: Option[Executor],
     handle: Request => Response
 ) {
-  private final class Connection(val socket: Socket) {
+  private final class Connection(val socket: Socket) extends Runnable {
     var active =
       false // guarded by lifecycle, including idle/head -> exchange handover
-    val thread = new Thread(() => serve(this), "potateh-connection")
+    var thread: Option[Thread] = None // guarded by lifecycle
+
+    override def run(): Unit = {
+      val admitted = lifecycle.synchronized {
+        if (state != State.Running || !connections.contains(this)) false
+        else { thread = Some(Thread.currentThread()); true }
+      }
+      if (admitted)
+        try serve(this)
+        finally lifecycle.synchronized {
+          thread = None
+          connections -= this
+          lifecycle.notifyAll()
+        }
+    }
   }
   private enum State { case Running, Stopping, Stopped }
   private val lifecycle = new Object
   private var state = State.Running
   private var stopOwner: Option[Thread] = None
   private val connections = mutable.Set.empty[Connection]
-  // Retain handles until thread termination, including final cleanup outside serve.
-  private val workers = mutable.Set.empty[Thread]
+  private val (executor, ownedExecutor) = suppliedExecutor match {
+    case Some(value) => (value, None)
+    case None =>
+      val pool = Executors.newCachedThreadPool(task =>
+        new Thread(task, "potateh-connection")
+      )
+      (pool: Executor, Some(pool))
+  }
   private val writes = new WriteTimeouts(config.timeouts.write.toNanos)
   private val acceptThread = new Thread(() => accept(), "potateh-accept")
   val address: InetSocketAddress =
@@ -51,11 +77,13 @@ private[potateh] final class BlockingServer(
   def stop(): Unit = {
     val self = Thread.currentThread()
     var interrupted = Thread.interrupted()
-    val deadline = lifecycle.synchronized {
+    val (deadline, fromConnection) = lifecycle.synchronized {
       if (state == State.Stopped) { if (interrupted) self.interrupt(); return }
       if (state == State.Stopping) {
         // A worker must return to let an existing stop caller finish its exchange.
-        if (workers.contains(self) || stopOwner.contains(self)) {
+        if (
+          connections.exists(_.thread.contains(self)) || stopOwner.contains(self)
+        ) {
           if (interrupted) self.interrupt(); return
         }
         while (state != State.Stopped) {
@@ -69,14 +97,20 @@ private[potateh] final class BlockingServer(
       stopOwner = Some(self)
       closeListener()
       connections.filterNot(_.active).foreach(c => close(c.socket))
+      // Disable queued tasks even if they remain in a caller's executor.
+      connections.filterInPlace(_.thread.nonEmpty)
       lifecycle.notifyAll()
-      System.nanoTime() + config.timeouts.shutdownGrace.toNanos
+      (
+        System.nanoTime() + config.timeouts.shutdownGrace.toNanos,
+        connections.exists(_.thread.contains(self))
+      )
     }
     try {
+      ownedExecutor.foreach(_.shutdown())
       lifecycle.synchronized {
         while (
           connections.exists(c =>
-            c.active && (c.thread ne self)
+            c.active && !c.thread.contains(self)
           ) && deadline - System.nanoTime() > 0
         ) {
           try lifecycle.wait(millis(deadline - System.nanoTime()))
@@ -85,10 +119,29 @@ private[potateh] final class BlockingServer(
         connections.foreach(c => close(c.socket))
       }
       writes.stop()
-      val owned = lifecycle.synchronized {
-        workers.toVector ++ Vector(acceptThread, writes.thread)
+      ownedExecutor match {
+        case Some(pool) if !fromConnection =>
+          while (!pool.isTerminated && deadline - System.nanoTime() > 0) {
+            try
+              pool.awaitTermination(
+                math.max(0L, deadline - System.nanoTime()),
+                TimeUnit.NANOSECONDS
+              )
+            catch { case _: InterruptedException => interrupted = true }
+          }
+        case _ =>
+          // Shared executors stay open; callback stop must exclude its own task.
+          lifecycle.synchronized {
+            while (
+              connections.exists(c => c.thread.exists(_ ne self)) &&
+              deadline - System.nanoTime() > 0
+            ) {
+              try lifecycle.wait(millis(deadline - System.nanoTime()))
+              catch { case _: InterruptedException => interrupted = true }
+            }
+          }
       }
-      owned.filterNot(_ eq self).foreach { thread =>
+      Vector(acceptThread, writes.thread).filterNot(_ eq self).foreach { thread =>
         while (thread.isAlive && deadline - System.nanoTime() > 0) {
           try thread.join(millis(deadline - System.nanoTime()))
           catch { case _: InterruptedException => interrupted = true }
@@ -107,22 +160,33 @@ private[potateh] final class BlockingServer(
     try {
       while (running) {
         val socket = listener.accept()
-        lifecycle.synchronized {
-          workers.filterInPlace(_.isAlive)
+        val admitted = lifecycle.synchronized {
           if (
             state != State.Running || connections.size >= config.maxConnections
-          ) close(socket)
+          ) None
           else {
             val connection = new Connection(socket)
             connections += connection
-            workers += connection.thread
-            try connection.thread.start()
+            Some(connection)
+          }
+        }
+        admitted match {
+          case None => close(socket)
+          case Some(connection) =>
+            // Executors may run inline; never hold lifecycle while submitting.
+            try executor.execute(connection)
             catch {
               case error: Throwable =>
-                connections -= connection; workers -= connection.thread;
-                close(socket); throw error
+                close(socket)
+                lifecycle.synchronized {
+                  connections -= connection
+                  lifecycle.notifyAll()
+                }
+                error match {
+                  case _: RejectedExecutionException => ()
+                  case _                             => throw error
+                }
             }
-          }
         }
       }
     } catch {
@@ -203,9 +267,6 @@ private[potateh] final class BlockingServer(
     } catch { case NonFatal(_) => () }
     finally {
       close(socket)
-      lifecycle.synchronized {
-        connections -= connection; lifecycle.notifyAll()
-      }
     }
   }
 

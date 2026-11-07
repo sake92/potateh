@@ -19,6 +19,7 @@ local const core = new CreateCrossModules {
     }
   }
   testTemplate = (template.asTest()) {
+    sources { "src-jvm" }
     deps { "org.scalameta::munit::1.3.6" }
     testParallelism = 1
   }

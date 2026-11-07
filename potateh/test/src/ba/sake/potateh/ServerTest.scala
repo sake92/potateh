@@ -8,7 +8,13 @@ import java.net.{
   SocketTimeoutException
 }
 import java.nio.charset.StandardCharsets.ISO_8859_1
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{
+  CountDownLatch,
+  Executor,
+  Executors,
+  RejectedExecutionException,
+  TimeUnit
+}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.concurrent.duration.*
 
@@ -106,6 +112,214 @@ class ServerTest extends munit.FunSuite {
   }
   private def await(latch: CountDownLatch): Unit = {
     val completed = latch.await(3, TimeUnit.SECONDS); assert(completed)
+  }
+
+  test("stop terminates default executor workers") {
+    val worker = new AtomicReference[Thread]
+    val server = Server.start(config) { _ =>
+      worker.set(Thread.currentThread())
+      response("ok")
+    }
+    try {
+      withSocket(server) { socket =>
+        send(socket, get(fields = "Connection: close\r\n"))
+        assertEquals(receive(socket).body, "ok")
+      }
+      server.stop()
+      worker.get().join(1000)
+      assert(!worker.get().isAlive)
+    } finally server.stop()
+  }
+
+  test("supplied executor schedules callbacks and remains usable after stop") {
+    val worker = new AtomicReference[Thread]
+    val pool = Executors.newSingleThreadExecutor(task => {
+      val thread = new Thread(task, "application-worker")
+      worker.set(thread)
+      thread
+    })
+    val server = Server.start(config, pool) { _ =>
+      assert(Thread.currentThread() eq worker.get())
+      response("pooled")
+    }
+    try {
+      withSocket(server) { socket =>
+        send(socket, get(fields = "Connection: close\r\n"))
+        assertEquals(receive(socket).body, "pooled")
+      }
+      server.stop()
+      val usable = new CountDownLatch(1)
+      pool.execute(() => usable.countDown())
+      await(usable)
+      assert(!pool.isShutdown)
+    } finally {
+      server.stop()
+      pool.shutdownNow()
+      assert(pool.awaitTermination(3, TimeUnit.SECONDS))
+    }
+  }
+
+  test("executor rejection closes the socket and releases admission without stopping the server") {
+    val submissions = new AtomicInteger
+    val pool = Executors.newSingleThreadExecutor()
+    val executor: Executor = task => {
+      if (submissions.getAndIncrement() == 0)
+        throw new RejectedExecutionException("saturated")
+      pool.execute(task)
+    }
+    val server = Server.start(config.copy(maxConnections = 1), executor)(_ => response("ok"))
+    try {
+      withSocket(server)(closed)
+      eventually() {
+        withSocket(server) { socket =>
+          send(socket, get())
+          assertEquals(receive(socket).body, "ok")
+        }
+      }
+    } finally {
+      server.stop()
+      pool.shutdownNow()
+      assert(pool.awaitTermination(3, TimeUnit.SECONDS))
+    }
+  }
+
+  test("queued connections count toward admission and never dispatch after stop") {
+    val pool = Executors.newSingleThreadExecutor()
+    val occupied = new CountDownLatch(1)
+    val submitted = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    val calls = new AtomicInteger
+    pool.execute(() => { occupied.countDown(); await(release) })
+    await(occupied)
+    val executor: Executor = task => {
+      pool.execute(task)
+      submitted.countDown()
+    }
+    val server = Server.start(config.copy(maxConnections = 1), executor) { _ =>
+      calls.incrementAndGet()
+      response("unexpected")
+    }
+    try {
+      withSocket(server) { queued =>
+        send(queued, get())
+        await(submitted)
+        withSocket(server)(closed)
+        server.stop()
+        closed(queued)
+        release.countDown()
+        val drained = new CountDownLatch(1)
+        pool.execute(() => drained.countDown())
+        await(drained)
+        assertEquals(calls.get(), 0)
+        assert(!pool.isShutdown)
+      }
+    } finally {
+      release.countDown()
+      server.stop()
+      pool.shutdownNow()
+      assert(pool.awaitTermination(3, TimeUnit.SECONDS))
+    }
+  }
+
+  test("shared executor shutdown waits for running tasks without joining pool threads") {
+    val pool = Executors.newSingleThreadExecutor()
+    val entered = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    val server = Server.start(config, pool) { _ =>
+      entered.countDown()
+      await(release)
+      response("ok")
+    }
+    val stopped = new CountDownLatch(1)
+    val stopper = new Thread(() => { server.stop(); stopped.countDown() })
+    try {
+      withSocket(server) { socket =>
+        send(socket, get() + get())
+        await(entered)
+        stopper.start()
+        assert(!stopped.await(100, TimeUnit.MILLISECONDS))
+        release.countDown()
+        assertEquals(receive(socket).body, "ok")
+        closed(socket)
+        await(stopped)
+        val usable = new CountDownLatch(1)
+        pool.execute(() => usable.countDown())
+        await(usable)
+      }
+    } finally {
+      release.countDown()
+      server.stop()
+      stopper.join(3000)
+      assert(!stopper.isAlive)
+      pool.shutdownNow()
+      assert(pool.awaitTermination(3, TimeUnit.SECONDS))
+    }
+  }
+
+  test("callback stop with a supplied executor does not wait for itself") {
+    for (external <- List(false, true)) {
+      val pool = Executors.newSingleThreadExecutor()
+      val entered = new CountDownLatch(1)
+      val proceed = new CountDownLatch(1)
+      val returned = new CountDownLatch(1)
+      val ref = new AtomicReference[Server]
+      val server = Server.start(config, pool) { _ =>
+        entered.countDown()
+        await(proceed)
+        ref.get().stop()
+        returned.countDown()
+        response("ok")
+      }
+      ref.set(server)
+      val stopper = new Thread(() => server.stop())
+      try {
+        withSocket(server) { socket =>
+          send(socket, get())
+          await(entered)
+          if (external) {
+            withSocket(server) { idle =>
+              stopper.start()
+              closed(idle)
+            }
+          }
+          proceed.countDown()
+          await(returned)
+          if (external) assertEquals(receive(socket).body, "ok")
+          closed(socket)
+        }
+      } finally {
+        proceed.countDown()
+        server.stop()
+        stopper.join(3000)
+        assert(!stopper.isAlive)
+        pool.shutdownNow()
+        assert(pool.awaitTermination(3, TimeUnit.SECONDS))
+      }
+    }
+  }
+
+  test("direct executor does not hold the lifecycle lock while serving a connection") {
+    val executor: Executor = task => task.run()
+    val entered = new CountDownLatch(1)
+    val ended = new CountDownLatch(1)
+    val settings = config.copy(timeouts =
+      config.timeouts.copy(bodyRead = 10.seconds, shutdownGrace = 100.millis)
+    )
+    val server = Server.start(settings, executor) { request =>
+      entered.countDown()
+      try request.body.read()
+      finally ended.countDown()
+      response("ok")
+    }
+    try {
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\n\r\n")
+        await(entered)
+        server.stop()
+        await(ended)
+        closed(socket)
+      }
+    } finally server.stop()
   }
 
   test(

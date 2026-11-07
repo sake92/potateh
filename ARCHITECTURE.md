@@ -11,7 +11,8 @@ flowchart TD
     subgraph Core["Shared JVM / Scala Native implementation"]
         Engine --> Accept["Accept thread<br/>ServerSocket"]
         Client["HTTP client"] <-->|"TCP"| Accept
-        Accept -->|"admit within maxConnections"| Worker["Connection worker<br/>one platform thread per connection"]
+        Accept -->|"admit within maxConnections"| Executor["Executor<br/>server default or caller-supplied"]
+        Executor --> Worker["Connection task<br/>one task per connection"]
         Worker -->|"read next request head"| Parser["RequestHeadParser<br/>syntax, limits and framing"]
         Parser --> Exchange["Exchange<br/>one request / response lifetime"]
         Exchange --> Input["FixedLengthInputStream / ChunkedInputStream<br/>bounded request body and trailers"]
@@ -29,8 +30,15 @@ flowchart TD
     end
 ```
 
-Connections run concurrently; exchanges on each connection run sequentially.
-Admission has no accepted-socket task queue: excess connections are closed.
+Connections can run concurrently; exchanges on each connection run sequentially.
+The default executor uses a cached platform-thread pool with no task queue.
+`Server.start(config, executor)(handle)` accepts a caller-owned executor, including
+a JVM virtual-thread executor. Queued and running connections both count toward
+`maxConnections`; excess connections and rejected submissions are closed.
+Supplied executors must execute tasks or reject by throwing, rather than silently
+discarding them. Inline execution serves connections on the accept thread.
+The initial head deadline starts when a connection task begins; executor queue
+waiting is outside the I/O timeout budget.
 The parser enforces an absolute request-head deadline; body reads use socket
 timeouts, while the watcher bounds socket writes. Handler computation has no
 execution deadline.
@@ -42,7 +50,10 @@ failures prevent reuse; unread bodies are not drained.
 
 `Server.stop()` stops admission, closes idle/head-reading connections, allows
 active exchanges the configured shutdown grace, then closes remaining sockets.
-It signals owned infrastructure and joins threads within the remaining budget.
+Queued tasks are disabled, so delayed execution cannot dispatch a request after
+shutdown. It waits for running connection tasks within the remaining budget,
+shuts down its default executor and joins owned infrastructure threads. A supplied
+executor remains caller-owned and usable after the server stops.
 Applications own when to call it; there is no automatic shutdown hook.
 
 The public API is in `potateh/src/ba/sake/potateh`; connection, exchange and codec

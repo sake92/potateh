@@ -20,9 +20,13 @@ println(server.address) // defaults to 127.0.0.1:8080
 ```
 
 Pass a `ServerConfig` to customize the bind address, limits and timeouts.
-Callbacks run concurrently across connections. Body streams belong to their
+Callbacks may run concurrently across connections. Body streams belong to their
 exchange; use them only in the callback or synchronous response writer.
 The server manages HTTP framing and connection headers.
+
+Use `Server.start(config, executor)(handle)` to supply a thread pool or JVM
+virtual-thread executor. Each task serves a whole connection; queued connections
+count toward the connection limit. The caller owns the supplied executor.
 
 Routing, authentication, TLS, HTTP/2 and WebSockets belong outside this core.
 
