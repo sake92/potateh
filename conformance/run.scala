@@ -6,6 +6,7 @@
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import mainargs.{arg, main, ParserForMethods}
 import org.apache.tools.ant.types.Commandline
 import scala.collection.mutable
@@ -343,15 +344,21 @@ object ConformanceRunner {
   }
 
   object Children {
-    private val lock = new Object()
-    private val owned = mutable.LinkedHashSet.empty[Process]
+    private val lock = new ReentrantLock
+    private val owned = mutable.LinkedHashMap.empty[Process, ReentrantLock]
     private var closing = false
+
+    private inline def withLock[A](lock: ReentrantLock)(inline operation: A): A = {
+      lock.lock()
+      try operation
+      finally lock.unlock()
+    }
 
     def start(
         command: Seq[String],
         log: Path,
         env: Map[String, String] = Map.empty
-    ): Process = lock.synchronized {
+    ): Process = withLock(lock) {
       require(!closing, "Runner is shutting down")
       // A new session contains descendants, so cleanup also reaches children of a crashed leader.
       val builder = new ProcessBuilder((Seq("setsid") ++ command)*)
@@ -360,20 +367,27 @@ object ConformanceRunner {
         .redirectOutput(log.toFile)
       env.foreach { case (key, value) => builder.environment().put(key, value) }
       val process = builder.start()
-      owned += process
+      owned(process) = new ReentrantLock
       process
     }
 
     def shutdown(): Unit = {
-      val processes = lock.synchronized {
+      val processes = withLock(lock) {
         closing = true
-        owned.toVector
+        owned.keys.toVector
       }
       processes.reverseIterator.foreach(stop)
     }
 
-    def stop(process: Process): Unit = process.synchronized {
-      if (!lock.synchronized(owned.contains(process))) return
+    def stop(process: Process): Unit = {
+      val processLock = withLock(lock)(owned.get(process))
+      processLock.foreach { currentLock =>
+        withLock(currentLock) { stopOwned(process) }
+      }
+    }
+
+    private def stopOwned(process: Process): Unit = {
+      if (!withLock(lock)(owned.contains(process))) return
       var interrupted = Thread.interrupted()
       def waitBounded(child: Process, milliseconds: Long): Boolean = {
         val deadline = {
@@ -410,7 +424,7 @@ object ConformanceRunner {
           s"Could not reap child process ${process.pid()}"
         )
       } finally {
-        lock.synchronized { owned -= process }
+        withLock(lock) { owned -= process }
         if (interrupted) Thread.currentThread().interrupt()
       }
     }

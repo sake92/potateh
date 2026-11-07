@@ -6,6 +6,7 @@ import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException
 import scala.collection.mutable
 import scala.util.control.NonFatal
 import java.util.concurrent.{Executor, Executors, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.locks.ReentrantLock
 
 /** One executor task per admitted connection, including queued connections. */
 private[potateh] final class BlockingServer(
@@ -22,17 +23,17 @@ private[potateh] final class BlockingServer(
     var thread: Option[Thread] = None // guarded by lifecycle
 
     override def run(): Unit = {
-      val admitted = lifecycle.synchronized {
+      val admitted = withLifecycle {
         if (state != State.Running || !connections.contains(this)) false
         else { thread = Some(Thread.currentThread()); true }
       }
       if (admitted) {
         try serve(this)
         finally {
-          lifecycle.synchronized {
+          withLifecycle {
             thread = None
             connections -= this
-            lifecycle.notifyAll()
+            lifecycleChanged.signalAll()
           }
         }
       }
@@ -41,7 +42,8 @@ private[potateh] final class BlockingServer(
 
   private enum State { case Running, Stopping, Stopped }
 
-  private val lifecycle = new Object
+  private val lifecycle = new ReentrantLock
+  private val lifecycleChanged = lifecycle.newCondition()
   private var state = State.Running
   private var stopOwner: Option[Thread] = None
   private val connections = mutable.Set.empty[Connection]
@@ -67,7 +69,7 @@ private[potateh] final class BlockingServer(
   def stop(): Unit = {
     val self = Thread.currentThread()
     var interrupted = Thread.interrupted()
-    val (deadline, fromConnection) = lifecycle.synchronized {
+    val (deadline, fromConnection) = withLifecycle {
       if (state == State.Stopped) { if (interrupted) self.interrupt(); return }
       if (state == State.Stopping) {
         // A worker must return to let an existing stop caller finish its exchange.
@@ -75,7 +77,7 @@ private[potateh] final class BlockingServer(
           if (interrupted) self.interrupt(); return
         }
         while (state != State.Stopped) {
-          try lifecycle.wait()
+          try lifecycleChanged.await()
           catch { case _: InterruptedException => interrupted = true }
         }
         if (interrupted) self.interrupt()
@@ -87,7 +89,7 @@ private[potateh] final class BlockingServer(
       connections.filterNot(_.active).foreach(c => close(c.socket))
       // Disable queued tasks even if they remain in a caller's executor.
       connections.filterInPlace(_.thread.nonEmpty)
-      lifecycle.notifyAll()
+      lifecycleChanged.signalAll()
       (
         System.nanoTime() + config.timeouts.shutdownGrace.toNanos,
         connections.exists(_.thread.contains(self))
@@ -95,9 +97,9 @@ private[potateh] final class BlockingServer(
     }
     try {
       ownedExecutor.foreach(_.shutdown())
-      lifecycle.synchronized {
+      withLifecycle {
         while (connections.exists(c => c.active && !c.thread.contains(self)) && deadline - System.nanoTime() > 0) {
-          try lifecycle.wait(millis(deadline - System.nanoTime()))
+          try lifecycleChanged.awaitNanos(deadline - System.nanoTime())
           catch { case _: InterruptedException => interrupted = true }
         }
         connections.foreach(c => close(c.socket))
@@ -115,12 +117,12 @@ private[potateh] final class BlockingServer(
           }
         case _ =>
           // Shared executors stay open; callback stop must exclude its own task.
-          lifecycle.synchronized {
+          withLifecycle {
             while (
               connections.exists(c => c.thread.exists(_ ne self)) &&
               deadline - System.nanoTime() > 0
             ) {
-              try lifecycle.wait(millis(deadline - System.nanoTime()))
+              try lifecycleChanged.awaitNanos(deadline - System.nanoTime())
               catch { case _: InterruptedException => interrupted = true }
             }
           }
@@ -132,19 +134,25 @@ private[potateh] final class BlockingServer(
         }
       }
     } finally {
-      lifecycle.synchronized {
-        state = State.Stopped; stopOwner = None; lifecycle.notifyAll()
+      withLifecycle {
+        state = State.Stopped; stopOwner = None; lifecycleChanged.signalAll()
       }
       if (interrupted) self.interrupt()
     }
   }
 
-  private def running: Boolean = lifecycle.synchronized(state == State.Running)
+  private inline def withLifecycle[A](inline operation: A): A = {
+    lifecycle.lock()
+    try operation
+    finally lifecycle.unlock()
+  }
+
+  private def running: Boolean = withLifecycle(state == State.Running)
   private def accept(): Unit = {
     try {
       while (running) {
         val socket = listener.accept()
-        val admitted = lifecycle.synchronized {
+        val admitted = withLifecycle {
           if (state != State.Running || connections.size >= config.maxConnections) None
           else {
             val connection = new Connection(socket)
@@ -160,9 +168,9 @@ private[potateh] final class BlockingServer(
             catch {
               case error: Throwable =>
                 close(socket)
-                lifecycle.synchronized {
+                withLifecycle {
                   connections -= connection
-                  lifecycle.notifyAll()
+                  lifecycleChanged.signalAll()
                 }
                 error match {
                   case _: RejectedExecutionException => ()
@@ -236,7 +244,7 @@ private[potateh] final class BlockingServer(
         head match {
           case None        => return
           case Some(value) =>
-            val admitted = lifecycle.synchronized {
+            val admitted = withLifecycle {
               if (state != State.Running) false
               else { connection.active = true; true }
             }
@@ -244,8 +252,8 @@ private[potateh] final class BlockingServer(
             try {
               reuse = new Exchange(socket, input, output, value, config, handle).run()
             } finally {
-              lifecycle.synchronized {
-                connection.active = false; lifecycle.notifyAll()
+              withLifecycle {
+                connection.active = false; lifecycleChanged.signalAll()
               }
             }
         }
