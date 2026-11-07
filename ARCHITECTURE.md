@@ -59,3 +59,18 @@ Applications own when to call it; there is no automatic shutdown hook.
 The public API is in `potateh/src/ba/sake/potateh`; connection, exchange and codec
 implementation details are in its `internal` package. Routing, authentication,
 TLS and application formats belong outside this core.
+
+## Public API evolution
+
+For library changes, keep existing public factory and method signatures, including
+parameter names and defaults. Add new settings through `withX` methods; adding a
+defaulted parameter to an existing factory still changes its binary signature.
+This API replaces the initial snapshot's case classes and requires consumers to
+recompile. It prepares for compatible evolution; release-to-release binary
+compatibility has not yet been checked against a published baseline. Native
+applications must be relinked when upgrading.
+
+The design follows the [binary compatibility guide](https://github.com/jatcwang/binary-compatibility-guide):
+private constructors and individual update methods reduce the public signatures
+that depend on a model's full field list. Internal case classes remain implementation
+details. Public return types are explicit.

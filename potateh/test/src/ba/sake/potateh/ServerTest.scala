@@ -167,7 +167,7 @@ class ServerTest extends munit.FunSuite {
         throw new RejectedExecutionException("saturated")
       pool.execute(task)
     }
-    val server = Server.start(config.copy(maxConnections = 1), executor)(_ => response("ok"))
+    val server = Server.start(config.withMaxConnections(1), executor)(_ => response("ok"))
     try {
       withSocket(server)(closed)
       eventually() {
@@ -195,7 +195,7 @@ class ServerTest extends munit.FunSuite {
       pool.execute(task)
       submitted.countDown()
     }
-    val server = Server.start(config.copy(maxConnections = 1), executor) { _ =>
+    val server = Server.start(config.withMaxConnections(1), executor) { _ =>
       calls.incrementAndGet()
       response("unexpected")
     }
@@ -302,8 +302,8 @@ class ServerTest extends munit.FunSuite {
     val executor: Executor = task => task.run()
     val entered = new CountDownLatch(1)
     val ended = new CountDownLatch(1)
-    val settings = config.copy(timeouts =
-      config.timeouts.copy(bodyRead = 10.seconds, shutdownGrace = 100.millis)
+    val settings = config.withTimeouts(
+      config.timeouts.withBodyRead(10.seconds).withShutdownGrace(100.millis)
     )
     val server = Server.start(settings, executor) { request =>
       entered.countDown()
@@ -446,7 +446,7 @@ class ServerTest extends munit.FunSuite {
     "oversized declared bodies and unsupported expectations skip dispatch and continuation"
   ) {
     val calls = new AtomicInteger
-    withServer(config.copy(limits = HttpLimits(bodyBytes = Some(3))))(_ => {
+    withServer(config.withLimits(HttpLimits(bodyBytes = Some(3))))(_ => {
       calls.incrementAndGet(); response("bad")
     }) { server =>
       for (
@@ -468,7 +468,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (mode <- List("single", "bulk", "skip")) {
       val calls = new AtomicInteger
-      withServer(config.copy(limits = HttpLimits(bodyBytes = Some(3)))) {
+      withServer(config.withLimits(HttpLimits(bodyBytes = Some(3)))) {
         request =>
           calls.incrementAndGet()
           try
@@ -608,7 +608,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (mode <- List("underflow", "overflow", "throw", "body-failure")) {
       val calls = new AtomicInteger
-      withServer(config.copy(limits = HttpLimits(bodyBytes = Some(1)))) {
+      withServer(config.withLimits(HttpLimits(bodyBytes = Some(1)))) {
         request =>
           calls.incrementAndGet()
           Response(body = ResponseBody.Writer(Some(2)) { out =>
@@ -651,7 +651,7 @@ class ServerTest extends munit.FunSuite {
         "Transfer-Encoding: chunked\r\n" -> "0\r\nX-Slow: "
       )
     ) {
-      withServer(config.copy(maxConnections = 1)) { request =>
+      withServer(config.withMaxConnections(1)) { request =>
         request.body.transferTo(new ByteArrayOutputStream); response("ok")
       } { server =>
         withSocket(server) { socket =>
@@ -699,7 +699,7 @@ class ServerTest extends munit.FunSuite {
     }
   }
   test("silent and idle persistent connections close and release admission") {
-    withServer(config.copy(maxConnections = 1))(_ => response("ok")) { server =>
+    withServer(config.withMaxConnections(1))(_ => response("ok")) { server =>
       withSocket(server)(closed)
       eventually() {
         withSocket(server) { socket =>
@@ -714,7 +714,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     val entered = new CountDownLatch(1)
     val release = new CountDownLatch(1)
-    withServer(config.copy(maxConnections = 1)) { request =>
+    withServer(config.withMaxConnections(1)) { request =>
       if (request.target == "/hold") { entered.countDown(); await(release) }
       response("ok")
     } { server =>
@@ -750,7 +750,7 @@ class ServerTest extends munit.FunSuite {
   test("blocked socket writes expire and the server recovers") {
     val started = new CountDownLatch(1)
     val finished = new CountDownLatch(1)
-    withServer(config.copy(maxConnections = 1)) { request =>
+    withServer(config.withMaxConnections(1)) { request =>
       if (request.target != "/large") response("ok")
       else
         Response(body = ResponseBody.Writer() { out =>
@@ -802,8 +802,8 @@ class ServerTest extends munit.FunSuite {
   ) {
     val entered = new CountDownLatch(1)
     val ended = new CountDownLatch(1)
-    val settings = config.copy(timeouts =
-      config.timeouts.copy(bodyRead = 10.seconds, shutdownGrace = 200.millis)
+    val settings = config.withTimeouts(
+      config.timeouts.withBodyRead(10.seconds).withShutdownGrace(200.millis)
     )
     val server = Server.start(settings) { request =>
       entered.countDown();
@@ -856,7 +856,7 @@ class ServerTest extends munit.FunSuite {
     try withSocket(server) { socket => server.stop(); closed(socket) }
     finally server.stop()
     val rebound =
-      Server.start(config.copy(bindAddress = address))(_ => response("new"))
+      Server.start(config.withBindAddress(address))(_ => response("new"))
     rebound.stop()
   }
   private def eventually()(assertion: => Unit): Unit = {
@@ -874,7 +874,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (limit <- List(Some(3L), None)) {
       val payload = if (limit.nonEmpty) "abc" else "x" * (1024 * 1024 + 1)
-      withServer(config.copy(limits = HttpLimits(bodyBytes = limit))) {
+      withServer(config.withLimits(HttpLimits(bodyBytes = limit))) {
         request =>
           val sink = new ByteArrayOutputStream
           request.body.transferTo(sink)
@@ -903,7 +903,7 @@ class ServerTest extends munit.FunSuite {
     }
   }
   test("Some zero permits empty bodies and rejects chunked payloads") {
-    withServer(config.copy(limits = HttpLimits(bodyBytes = Some(0)))) {
+    withServer(config.withLimits(HttpLimits(bodyBytes = Some(0)))) {
       request =>
         request.body.transferTo(new ByteArrayOutputStream); response("ok")
     } { server =>
@@ -949,8 +949,8 @@ class ServerTest extends munit.FunSuite {
     val started = new CountDownLatch(1)
     val ended = new CountDownLatch(1)
     val server = Server.start(
-      config.copy(timeouts =
-        config.timeouts.copy(write = 10.seconds, shutdownGrace = 200.millis)
+      config.withTimeouts(
+        config.timeouts.withWrite(10.seconds).withShutdownGrace(200.millis)
       )
     ) { _ =>
       Response(body = ResponseBody.Writer() { out =>
@@ -971,7 +971,7 @@ class ServerTest extends munit.FunSuite {
   test("failed bind cleans up without affecting the existing server") {
     withServer()(_ => response("ok")) { server =>
       intercept[IOException](
-        Server.start(config.copy(bindAddress = server.address))(_ =>
+        Server.start(config.withBindAddress(server.address))(_ =>
           response("wrong")
         )
       )
@@ -987,7 +987,7 @@ class ServerTest extends munit.FunSuite {
     val entered = new CountDownLatch(2)
     val release = new CountDownLatch(1)
     val calls = new AtomicInteger
-    withServer(config.copy(maxConnections = 2)) { _ =>
+    withServer(config.withMaxConnections(2)) { _ =>
       calls.incrementAndGet(); entered.countDown(); await(release);
       response("ok")
     } { server =>

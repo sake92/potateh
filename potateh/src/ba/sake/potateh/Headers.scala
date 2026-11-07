@@ -1,7 +1,7 @@
 package ba.sake.potateh
 
 /** Immutable fields in wire order. Repeated fields remain separate. */
-final case class Headers private (fields: Vector[(String, String)]) {
+final class Headers private (val fields: Vector[(String, String)]) {
   fields.foreach { case (name, value) =>
     require(
       name.nonEmpty && name.forall(internal.HttpSyntax.isToken),
@@ -9,6 +9,13 @@ final case class Headers private (fields: Vector[(String, String)]) {
     )
     require(internal.HttpSyntax.isFieldValue(value), "Invalid header value")
   }
+
+  override def equals(other: Any): Boolean = other match {
+    case that: Headers => fields == that.fields
+    case _             => false
+  }
+  override def hashCode(): Int = fields.hashCode()
+  override def toString: String = s"Headers($fields)"
 
   def first(name: String): Option[String] = fields.collectFirst {
     case (key, value) if key.equalsIgnoreCase(name) => value

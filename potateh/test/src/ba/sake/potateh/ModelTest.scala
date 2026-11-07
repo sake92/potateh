@@ -26,6 +26,52 @@ class ModelTest extends munit.FunSuite {
     )
     intercept[IllegalArgumentException](ResponseBody.Writer(Some(-1))(_ => ()))
   }
+  test("configuration updates preserve unrelated settings and validate new bounds") {
+    val original = ServerConfig(
+      maxConnections = 17,
+      limits = HttpLimits(headerCount = 23),
+      timeouts = HttpTimeouts(head = 7.seconds)
+    )
+    val changed = original
+      .withMaxConnections(19)
+      .withLimits(original.limits.withBodyBytes(None))
+      .withTimeouts(original.timeouts.withWrite(11.seconds))
+    assertEquals(changed.maxConnections, 19)
+    assertEquals(changed.bindAddress, original.bindAddress)
+    assertEquals(changed.limits.headerCount, 23)
+    assertEquals(changed.limits.bodyBytes, None)
+    assertEquals(changed.timeouts.head, 7.seconds)
+    assertEquals(changed.timeouts.write, 11.seconds)
+    assertEquals(original.maxConnections, 17)
+    assertEquals(original.limits.bodyBytes, Some(8L * 1024 * 1024))
+    assertEquals(original.timeouts.write, 30.seconds)
+    intercept[IllegalArgumentException](original.withMaxConnections(0))
+    intercept[IllegalArgumentException](original.limits.withBodyBytes(Some(-1)))
+    intercept[IllegalArgumentException](original.timeouts.withHead(Duration.Zero))
+  }
+  test("response updates retain the writer and leave the original unchanged") {
+    val output = new java.io.ByteArrayOutputStream()
+    val writer = ResponseBody.Writer()(out => out.write(42)).withLength(Some(1))
+    val original = Response(status = 201, body = writer)
+    val changed = original.withStatus(202).withHeaders(Headers("X-Test" -> "yes"))
+    assertEquals(changed.status, 202)
+    assertEquals(changed.headers.first("X-Test"), Some("yes"))
+    val retainedWriter = changed.body.asInstanceOf[ResponseBody.Writer]
+    assertEquals(retainedWriter.length, Some(1L))
+    retainedWriter.write(output)
+    assertEquals(output.toByteArray.toVector, Vector(42.toByte))
+    assertEquals(original.status, 201)
+    assertEquals(original.headers.fields, Vector.empty)
+    intercept[IllegalArgumentException](writer.withLength(Some(-1)))
+  }
+  test("headers retain ordered case sensitive value equality") {
+    val headers = Headers("X-Test" -> "one", "X-Test" -> "two")
+    val same = Headers.from(headers.fields)
+    assertEquals(headers, same)
+    assertEquals(headers.hashCode(), same.hashCode())
+    assertNotEquals(headers, Headers("X-Test" -> "two", "X-Test" -> "one"))
+    assertNotEquals(headers, Headers("x-test" -> "one", "X-Test" -> "two"))
+  }
   test("platform threads publish and join on both targets") {
     val value = new AtomicInteger(0)
     val thread = new Thread(() => { value.set(42); () })

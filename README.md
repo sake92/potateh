@@ -20,6 +20,12 @@ println(server.address) // defaults to 127.0.0.1:8080
 ```
 
 Pass a `ServerConfig` to customize the bind address, limits and timeouts.
+Requests, responses, headers, writers and configuration use final classes with
+private constructors. Use named-argument factories for creation and `withX` methods for immutable
+updates, for example `ServerConfig().withMaxConnections(256)` or
+`response.withStatus(201)`. These types have no case-class `copy`, extractors or
+`Product` API. Except for `Headers`, they use reference equality.
+
 Callbacks may run concurrently across connections. Body streams belong to their
 exchange; use them only in the callback or synchronous response writer.
 The server manages HTTP framing and connection headers.
