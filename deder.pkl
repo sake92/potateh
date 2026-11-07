@@ -31,9 +31,30 @@ local const core = new CreateCrossModules {
   }
 }.get
 
+local const fixture: ScalaModule = new {
+  id = "fixture-jvm"
+  root = "conformance/shared"
+  sources = new Listing { "." }
+  scalaVersion = "3.9.0"
+  javaVersion = "21"
+  javaHome = read("env:JAVA_HOME")
+  scalacOptions { "-release:21" }
+  moduleDeps { core.jvm }
+  mainClass = "conformance.ConformanceServer"
+}
+local const nativeFixture = (fixture.asNative()) {
+  id = "fixture-native"
+  scalaNativeVersion = "0.5.12"
+  multithreading = true
+  mode = "release-fast"
+  moduleDeps = new Listing { core.native }
+}
+
 modules {
   core.jvm
   core.jvm_test
   core.native
   core.native_test
+  fixture
+  nativeFixture
 }

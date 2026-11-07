@@ -15,3 +15,5 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y clang libunwind-dev libgc-dev
       - run: deder exec -t compile
       - run: deder exec -t test
+      - run: deder exec -m fixture-native -t nativeLink
+      - run: .deder/out/fixture-native/nativeLink/fixture-native --smoke

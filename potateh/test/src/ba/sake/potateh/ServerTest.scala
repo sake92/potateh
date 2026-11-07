@@ -655,4 +655,115 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test(
+    "exact decoded limits preserve pipeline and None permits large fixed and chunked uploads"
+  ) {
+    for (limit <- List(Some(3L), None)) {
+      val payload = if (limit.nonEmpty) "abc" else "x" * (1024 * 1024 + 1)
+      withServer(config.copy(limits = HttpLimits(bodyBytes = limit))) {
+        request =>
+          val sink = new ByteArrayOutputStream
+          request.body.transferTo(sink)
+          response(sink.size().toString)
+      } { server =>
+        for (chunked <- List(false, true)) withSocket(server) { socket =>
+          val fields =
+            if (chunked) "Transfer-Encoding: chunked\r\n"
+            else s"Content-Length: ${payload.length}\r\n"
+          val wire =
+            if (chunked)
+              Integer.toHexString(
+                payload.length
+              ) + "\r\n" + payload + "\r\n0\r\n\r\n"
+            else payload
+          send(
+            socket,
+            "POST / HTTP/1.1\r\nHost: x\r\n" + fields + "\r\n" + wire + get(
+              fields = "Connection: close\r\n"
+            )
+          )
+          assertEquals(receive(socket).body, payload.length.toString)
+          assertEquals(receive(socket).body, "0"); closed(socket)
+        }
+      }
+    }
+  }
+  test("Some zero permits empty bodies and rejects chunked payloads") {
+    withServer(config.copy(limits = HttpLimits(bodyBytes = Some(0)))) {
+      request =>
+        request.body.transferTo(new ByteArrayOutputStream); response("ok")
+    } { server =>
+      for (
+        (wire, code) <- List("0\r\n\r\n" -> 200, "1\r\nx\r\n0\r\n\r\n" -> 413)
+      ) withSocket(server) { socket =>
+        send(
+          socket,
+          "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n" + wire
+        )
+        assertEquals(receive(socket).status, code)
+      }
+    }
+  }
+  test(
+    "malformed and truncated bodies cannot be converted to success by a callback"
+  ) {
+    for (
+      (fields, payload) <- List(
+        "Content-Length: 3\r\n" -> "ab",
+        "Transfer-Encoding: chunked\r\n" -> "1\r\nxBAD\r\n"
+      )
+    ) {
+      withServer() { request =>
+        try request.body.transferTo(new ByteArrayOutputStream)
+        catch { case _: IOException => () }
+        response("wrong")
+      } { server =>
+        withSocket(server) { socket =>
+          send(
+            socket,
+            "POST / HTTP/1.1\r\nHost: x\r\n" + fields + "\r\n" + payload
+          )
+          socket.shutdownOutput()
+          assertEquals(receive(socket).status, 400); closed(socket)
+        }
+      }
+    }
+  }
+  test(
+    "stop unblocks blocked writes and owns its watcher through termination"
+  ) {
+    val started = new CountDownLatch(1)
+    val ended = new CountDownLatch(1)
+    val server = Server.start(
+      config.copy(timeouts =
+        config.timeouts.copy(write = 10.seconds, shutdownGrace = 200.millis)
+      )
+    ) { _ =>
+      Response(body = ResponseBody.Writer() { out =>
+        started.countDown()
+        try {
+          val block = new Array[Byte](65536);
+          (0 until 4096).foreach(_ => out.write(block))
+        } finally ended.countDown()
+      })
+    }
+    try
+      withSocket(server) { socket =>
+        socket.setReceiveBufferSize(1024); send(socket, get()); await(started)
+        server.stop(); await(ended)
+      }
+    finally server.stop()
+  }
+  test("failed bind cleans up without affecting the existing server") {
+    withServer()(_ => response("ok")) { server =>
+      intercept[IOException](
+        Server.start(config.copy(bindAddress = server.address))(_ =>
+          response("wrong")
+        )
+      )
+      withSocket(server) { socket =>
+        send(socket, get()); assertEquals(receive(socket).body, "ok")
+      }
+    }
+  }
 }

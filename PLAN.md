@@ -121,3 +121,9 @@ The same core callback API serves HTTP on JVM/Java 21 and Scala Native; relevant
   persistent sequential exchanges, lazy continuation, request stream lifetime,
   write watchdog and terminal stop. Shared real-socket regressions pass on JVM
   and Native, including forced/graceful/concurrent/callback stop and timeouts.
+- Checkpoint 4: source-scenario mapping is in COMPATIBILITY.md. Codec and
+  real-socket tests pass on both targets, including optional/zero/exact decoded
+  limits, truncated bodies, failed binds, backpressure and shutdown races.
+  The release-fast Native fixture linked and served its loopback smoke request
+  successfully. CI now includes that release fixture check; remote CI has not
+  been run for these changes.
