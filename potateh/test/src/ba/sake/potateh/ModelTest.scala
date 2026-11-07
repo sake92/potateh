@@ -4,6 +4,69 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.*
 
 class ModelTest extends munit.FunSuite {
+  test("limits report individual invalid fields in factories and updates") {
+    val limits = HttpLimits()
+    val cases = List[(String, Int, Int => HttpLimits, Int => HttpLimits)](
+      ("requestLineBytes", 1, v => HttpLimits(requestLineBytes = v), limits.withRequestLineBytes),
+      ("headerLineBytes", 1, v => HttpLimits(headerLineBytes = v), limits.withHeaderLineBytes),
+      ("headerSectionBytes", 2, v => HttpLimits(headerSectionBytes = v), limits.withHeaderSectionBytes),
+      ("headerCount", 0, v => HttpLimits(headerCount = v), limits.withHeaderCount),
+      ("chunkLineBytes", 1, v => HttpLimits(chunkLineBytes = v), limits.withChunkLineBytes),
+      ("chunkExtensionBytes", 0, v => HttpLimits(chunkExtensionBytes = v), limits.withChunkExtensionBytes),
+      ("trailerLineBytes", 1, v => HttpLimits(trailerLineBytes = v), limits.withTrailerLineBytes),
+      ("trailerSectionBytes", 2, v => HttpLimits(trailerSectionBytes = v), limits.withTrailerSectionBytes),
+      ("trailerCount", 0, v => HttpLimits(trailerCount = v), limits.withTrailerCount)
+    )
+    cases.foreach { case (name, minimum, create, update) =>
+      val invalid = minimum - 1
+      val expected = s"requirement failed: $name must be at least $minimum (was $invalid)"
+      interceptMessage[IllegalArgumentException](expected)(create(invalid))
+      interceptMessage[IllegalArgumentException](expected)(update(invalid))
+      create(minimum)
+      update(minimum)
+    }
+    val expected = "requirement failed: bodyBytes must be nonnegative when defined (was Some(-1))"
+    interceptMessage[IllegalArgumentException](expected)(HttpLimits(bodyBytes = Some(-1)))
+    interceptMessage[IllegalArgumentException](expected)(limits.withBodyBytes(Some(-1)))
+    assertEquals(HttpLimits(bodyBytes = Some(0)).bodyBytes, Some(0L))
+    assertEquals(limits.withBodyBytes(None).bodyBytes, None)
+  }
+  test("response status is validated on creation and updates") {
+    for (status <- List(Int.MinValue, 99, 600, Int.MaxValue)) {
+      val expected = s"requirement failed: status must be between 100 and 599 (was $status)"
+      interceptMessage[IllegalArgumentException](expected)(Response(status = status))
+      interceptMessage[IllegalArgumentException](expected)(Response().withStatus(status))
+    }
+    for (status <- List(100, 199, 200, 471, 599)) {
+      assertEquals(Response(status = status).status, status)
+      assertEquals(Response().withStatus(status).status, status)
+    }
+  }
+  test("timeouts report individual invalid fields") {
+    val timeouts = HttpTimeouts()
+    val cases = List[(String, FiniteDuration => HttpTimeouts, FiniteDuration => HttpTimeouts)](
+      ("idle", v => HttpTimeouts(idle = v), timeouts.withIdle),
+      ("head", v => HttpTimeouts(head = v), timeouts.withHead),
+      ("bodyRead", v => HttpTimeouts(bodyRead = v), timeouts.withBodyRead),
+      ("write", v => HttpTimeouts(write = v), timeouts.withWrite)
+    )
+    cases.foreach { case (name, create, update) =>
+      for (invalid <- List(-1.nanosecond, Duration.Zero, Int.MaxValue.toLong.millis + 1.nanosecond)) {
+        val expected = s"requirement failed: $name must be positive and at most 2147483647 milliseconds (was $invalid)"
+        interceptMessage[IllegalArgumentException](expected)(create(invalid))
+        interceptMessage[IllegalArgumentException](expected)(update(invalid))
+      }
+      create(1.nanosecond)
+      update(Int.MaxValue.toLong.millis)
+    }
+    for (invalid <- List(-1.nanosecond, 1.day + 1.nanosecond)) {
+      val expected = s"requirement failed: shutdownGrace must be between zero and one day (was $invalid)"
+      interceptMessage[IllegalArgumentException](expected)(HttpTimeouts(shutdownGrace = invalid))
+      interceptMessage[IllegalArgumentException](expected)(timeouts.withShutdownGrace(invalid))
+    }
+    assertEquals(HttpTimeouts(shutdownGrace = Duration.Zero).shutdownGrace, Duration.Zero)
+    assertEquals(timeouts.withShutdownGrace(1.day).shutdownGrace, 1.day)
+  }
   test("immutable ordered duplicate headers and case insensitive operations") {
     val initial = Headers("X-One" -> "a", "x-one" -> "b", "Other" -> "c")
     assertEquals(initial.all("X-ONE"), Vector("a", "b"))

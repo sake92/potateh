@@ -15,12 +15,16 @@ final class HttpLimits private (
     val trailerCount: Int,
     val bodyBytes: Option[Long]
 ) {
-  require(
-    requestLineBytes > 0 && headerLineBytes > 0 && chunkLineBytes > 0 && trailerLineBytes > 0
-  )
-  require(headerSectionBytes >= 2 && trailerSectionBytes >= 2)
-  require(headerCount >= 0 && trailerCount >= 0 && chunkExtensionBytes >= 0)
-  require(bodyBytes.forall(_ >= 0))
+  require(requestLineBytes > 0, s"requestLineBytes must be at least 1 (was $requestLineBytes)")
+  require(headerLineBytes > 0, s"headerLineBytes must be at least 1 (was $headerLineBytes)")
+  require(headerSectionBytes >= 2, s"headerSectionBytes must be at least 2 (was $headerSectionBytes)")
+  require(headerCount >= 0, s"headerCount must be at least 0 (was $headerCount)")
+  require(chunkLineBytes > 0, s"chunkLineBytes must be at least 1 (was $chunkLineBytes)")
+  require(chunkExtensionBytes >= 0, s"chunkExtensionBytes must be at least 0 (was $chunkExtensionBytes)")
+  require(trailerLineBytes > 0, s"trailerLineBytes must be at least 1 (was $trailerLineBytes)")
+  require(trailerSectionBytes >= 2, s"trailerSectionBytes must be at least 2 (was $trailerSectionBytes)")
+  require(trailerCount >= 0, s"trailerCount must be at least 0 (was $trailerCount)")
+  require(bodyBytes.forall(_ >= 0), s"bodyBytes must be nonnegative when defined (was $bodyBytes)")
 
   def withRequestLineBytes(value: Int): HttpLimits = {
     copy(requestLineBytes = value)
@@ -115,14 +119,16 @@ final class HttpTimeouts private (
     val write: FiniteDuration,
     val shutdownGrace: FiniteDuration
 ) {
-  private val io = List(idle, head, bodyRead, write)
-  require(
-    io.forall(d => d.toNanos > 0 && d.toNanos <= Int.MaxValue.toLong * 1000000L),
-    "I/O timeouts must fit socket milliseconds"
-  )
+  List("idle" -> idle, "head" -> head, "bodyRead" -> bodyRead, "write" -> write)
+    .foreach { case (name, value) =>
+      require(
+        value.toNanos > 0 && value.toNanos <= Int.MaxValue.toLong * 1000000L,
+        s"$name must be positive and at most 2147483647 milliseconds (was $value)"
+      )
+    }
   require(
     shutdownGrace.toNanos >= 0 && shutdownGrace <= 1.day,
-    "Shutdown grace must be between zero and one day"
+    s"shutdownGrace must be between zero and one day (was $shutdownGrace)"
   )
 
   def withIdle(value: FiniteDuration): HttpTimeouts = {

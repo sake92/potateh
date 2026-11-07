@@ -82,6 +82,8 @@ final class Response private (
     val headers: Headers,
     val body: ResponseBody
 ) {
+  require(status >= 100 && status < 600, s"status must be between 100 and 599 (was $status)")
+
   def withStatus(value: Int): Response = {
     copy(status = value)
   }
