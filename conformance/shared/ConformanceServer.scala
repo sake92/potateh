@@ -15,11 +15,12 @@ object ConformanceServer {
   def main(args: Array[String]): Unit = {
     val profile = sys.env.getOrElse("HTTP_CONFORMANCE_PROFILE", "h1spec")
     require(
-      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "fuzz").contains(
+      Set("h1spec", "http11probe", "slowclients", "slowhttptest", "sustained", "fuzz").contains(
         profile
       )
     )
-    val slow = profile == "slowclients" || profile == "slowhttptest"
+    val sustained = profile == "sustained"
+    val slow = profile == "slowclients" || profile == "slowhttptest" || sustained
     val fuzz = profile == "fuzz"
     val capacity = sys.env.getOrElse("HTTP_CONFORMANCE_CAPACITY", "roomy")
     require(Set("roomy", "limited").contains(capacity))
@@ -43,6 +44,14 @@ object ConformanceServer {
       } else HttpLimits(bodyBytes = Some(8L * 1024 * 1024)),
       timeouts = if (fuzz) {
         HttpTimeouts(idle = 2.seconds, head = 2.seconds, bodyRead = 2.seconds, shutdownGrace = 200.millis)
+      } else if (sustained) {
+        HttpTimeouts(
+          idle = 2.seconds,
+          head = 1.second,
+          bodyRead = 1.second,
+          write = 1.second,
+          shutdownGrace = 200.millis
+        )
       } else HttpTimeouts(shutdownGrace = 200.millis)
     )
     val server = Server.start(settings) { request =>
@@ -50,7 +59,20 @@ object ConformanceServer {
         println("HANDLING " + request.target)
         System.out.flush()
       }
-      if (slow && request.target == "/large") {
+      if (sustained && Set("/stream-fixed", "/stream-chunked").contains(request.target)) {
+        val length = Option.when(request.target == "/stream-fixed")(4096L)
+        Response(body = ResponseBody.Writer(length) { out =>
+          active.incrementAndGet()
+          try {
+            val block = Array.fill[Byte](256)('s'.toByte)
+            for (_ <- 0 until 16) {
+              out.write(block)
+              out.flush()
+              Thread.sleep(100)
+            }
+          } finally active.decrementAndGet()
+        })
+      } else if (slow && request.target == "/large") {
         Response(body = ResponseBody.Writer(Some(64L * 1024 * 1024)) { out =>
           active.incrementAndGet()
           println("LARGE_STARTED"); System.out.flush()

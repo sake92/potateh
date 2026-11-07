@@ -4,6 +4,7 @@
 //> using dep org.apache.ant:ant:1.10.15
 //> using file SlowClients.scala
 //> using file Fuzzing.scala
+//> using file SustainedLoad.scala
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
@@ -29,9 +30,8 @@ object ConformanceRunner {
 
   @main
   def run(
-      @arg(doc = "h1spec, http11probe, slowclients, slowhttptest or fuzz") suite: String,
-      @arg(doc = "External suite checkout at the pinned commit; not needed for slowclients or fuzz") checkout: String =
-        "",
+      @arg(doc = "h1spec, http11probe, slowclients, slowhttptest, sustained or fuzz") suite: String,
+      @arg(doc = "External suite checkout at the pinned commit; omit for built-in suites") checkout: String = "",
       @arg(doc = "Server command; single/double quotes group arguments, no shell expansion") server: String,
       @arg(doc = "New results directory; must not exist") output: String,
       deno: String = "deno",
@@ -45,7 +45,10 @@ object ConformanceRunner {
         "Maximum seconds per external probe invocation or fuzz campaign (excluding startup/cleanup)"
       ) timeout: Double = 900,
       @arg(doc = "Slow-client admission: both, roomy or limited") capacity: String = "both",
-      @arg(doc = "Slow-client observation seconds, 3–30; idle-drip always runs 32 seconds") duration: Int = 3,
+      @arg(doc =
+        "Observation seconds: slow-client suites 3–30 (default 3), sustained 10–600 (default 60)"
+      ) duration: Option[Int] = None,
+      @arg(doc = "Sustained slow-client count, 4–256; four legitimate clients run alongside") connections: Int = 16,
       @arg(
         name = "case",
         doc = "Repeatable slow-client scenario; omit to run all"
@@ -60,10 +63,14 @@ object ConformanceRunner {
   ): Int = {
     try {
       require(
-        pins.contains(suite) || suite == "slowclients" || suite == "fuzz",
+        pins.contains(suite) || Set("slowclients", "sustained", "fuzz").contains(suite),
         "Unknown --suite; see --help"
       )
       val slow = suite == "slowclients" || suite == "slowhttptest"
+      val sustained = suite == "sustained"
+      val seconds = duration.getOrElse(if (sustained) 60 else 3)
+      require(connections >= 4 && connections <= 256, "--connections must be between 4 and 256")
+      require(sustained || connections == 16, "--connections requires --suite sustained")
       require(iterations >= 1 && iterations <= 100000, "--iterations must be between 1 and 100000")
       require(startCase >= 0 && startCase <= Int.MaxValue - iterations, "--start-case is outside the supported range")
       require(
@@ -75,8 +82,8 @@ object ConformanceRunner {
         "Unknown --capacity"
       )
       require(
-        duration >= 3 && duration <= 30,
-        "--duration must be between 3 and 30 seconds"
+        if (sustained) seconds >= 10 && seconds <= 600 else seconds >= 3 && seconds <= 30,
+        "--duration must be 10–600 seconds for sustained, or 3–30 seconds for slow-client suites"
       )
       require(
         cases.forall(SlowClients.scenarios.contains),
@@ -97,8 +104,8 @@ object ConformanceRunner {
         "--idle-drip-expectation requires a slowclients run containing idle-drip"
       )
       require(
-        slow || (capacity == "both" && duration == 3),
-        "--capacity and --duration require a slow-client suite"
+        slow || sustained || (capacity == "both" && seconds == 3),
+        "--capacity and --duration require a slow-client or sustained suite"
       )
       require(
         timeout.isFinite && timeout > 0,
@@ -126,7 +133,7 @@ object ConformanceRunner {
         s"Results directory already exists: $destination; choose a new --output"
       )
       val revision = {
-        if (suite == "slowclients" || suite == "fuzz") {
+        if (Set("slowclients", "sustained", "fuzz").contains(suite)) {
           capture(Seq("git", "rev-parse", "HEAD")).trim
         } else {
           require(
@@ -165,7 +172,9 @@ object ConformanceRunner {
       }
       Option(destination.getParent).foreach(Files.createDirectories(_))
       Files.createDirectory(destination)
-      if (suite == "fuzz") {
+      if (sustained) {
+        SustainedLoad.run(command, destination, capacity, seconds, connections, revision)
+      } else if (suite == "fuzz") {
         Fuzzing.run(command, destination, seed, startCase, iterations, timeout, revision)
       } else if (slow) {
         SlowClients.run(
@@ -174,7 +183,7 @@ object ConformanceRunner {
           command,
           destination,
           capacity,
-          duration,
+          seconds,
           cases,
           timeout,
           revision,

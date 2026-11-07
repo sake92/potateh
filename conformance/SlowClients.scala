@@ -370,7 +370,7 @@ object SlowClients {
     }
   }
 
-  private def gracefulStop(
+  def gracefulStop(
       server: Process,
       stop: Path,
       log: Path,
@@ -506,7 +506,7 @@ object SlowClients {
     result
   }
 
-  private def resources(pid: Long, phase: String): ujson.Obj = {
+  def resources(pid: Long, phase: String): ujson.Obj = {
     val root = Path.of(s"/proc/$pid")
     val status = Files.readString(root.resolve("status"))
     val result = ujson.Obj(

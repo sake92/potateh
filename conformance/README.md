@@ -1,8 +1,9 @@
 # Run HTTP checks
 
-Use Linux, Java 21, Deder 0.22.2, Scala CLI, clang/libunwind, Git, npm, and
-.NET SDK 10.0.100. External tools stay outside the library and under ignored
-`conformance/out`. Build both fixtures and the Scala runner:
+Use Linux, Java 21, Deder 0.22.2, Scala CLI, and clang/libunwind to build the
+fixtures and runner. External suites below also use Git, npm, and .NET SDK
+10.0.100. External tools stay outside the library and under ignored
+`conformance/out`:
 
 ```sh
 mkdir -p conformance/out
@@ -125,6 +126,48 @@ seconds. Write schedules vary between whole buffers, single bytes and random
 fragments; TCP may coalesce writes. This is deterministic grammar/stateful
 testing, not coverage-guided fuzzing, exhaustive fragmentation or a load test.
 
+# Run sustained mixed traffic
+
+Build the fixtures and runner above, then run both admission modes on each target:
+
+```sh
+java -jar conformance/out/runner.jar --suite sustained --duration 60 --connections 16 \
+  --server 'java -jar .deder/out/fixture-jvm/assembly/out.jar' \
+  --output conformance/out/jvm-sustained
+
+java -jar conformance/out/runner.jar --suite sustained --duration 60 --connections 16 \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/native-sustained
+```
+
+`--duration` is 10–600 seconds per mode (default 60), excluding preflight and
+recovery. `--connections` is 4–256 renewing pressure clients (default 16).
+`--capacity both|roomy|limited` selects connection limits of 128 or 2; both run
+by default. Four legitimate clients run ordinary persistent requests, slow
+complete heads, slow fixed/chunked uploads and slow fixed/chunked downloads.
+Pressure clients renew dripped heads/bodies, stalled trailers and unread large
+responses. An admitted body reader and response writer are required before
+the competing clients start.
+
+The fixture uses owned server workers and one-second head/read/write timeouts;
+its successful uploads/downloads take about 1.6 seconds with 100 ms between
+blocks. Production defaults are unchanged. Every legitimate path must pass
+before and after pressure. With enough capacity for all clients, each role must
+make progress in every full ten-second window. Admission/transport failures
+under pressure are counted; malformed or corrupted responses fail the run.
+Each ordinary transaction contains eight requests on one connection.
+
+`run.json` contains per-role attempts, successes, transport failures and maximum
+successful transaction latency, plus one-second RSS/thread/fd samples. Pressure
+successes count completed client hold cycles, not successful HTTP responses or
+proof that the server kept those connections open. These are measurements,
+not throughput or memory bounds. Cached worker threads may remain after clients
+disconnect. Ordinary recovery must complete within five seconds; all legitimate
+paths are then checked again. Client connections have five-second I/O deadlines;
+all load threads are cancelled, sockets closed and threads joined before fixture
+shutdown. Failure/interruption retains an incomplete report and requests file
+shutdown, with process-group termination as a fallback.
+
 # Interpret results
 
 h1spec uses one socket read and a 500 ms timeout per case. Valid fragmented
@@ -143,8 +186,8 @@ this as permitting the empty value rather than requiring blanket rejection. This
 probe and a nonzero runner exit, without changing suite expectations.
 
 Local results are recorded below. Remote CI and other operating systems require
-separate verification. These are bounded functional diagnostics, not sustained
-load, performance, or complete RFC-conformance proof.
+separate verification. These are bounded local diagnostics, not production
+capacity, performance, or complete RFC-conformance proof.
 
 The idle-drip check accepts either EOF/reset or a fully validated bodyless 408
 followed by EOF. It records the 408 wire response; any premature success or
@@ -165,6 +208,16 @@ Native 0.5.12 release-fast with multithreading:
 | slowhttptest (three modes, two admission capacities) | 6/6 | 6/6 |
 | slowclients (ten cases, two admission capacities) | 20/20 | 20/20 |
 | Seeded fuzzing (48 families; seeds 1 and 8675309) | 2000/2000 | 2000/2000 |
+| Sustained mixed traffic (60 seconds per capacity, 16 pressure + 4 legitimate clients) | 2/2 | 2/2 |
+
+The sustained baseline used local changes based on `f0fc4a7`. All legitimate
+roles progressed throughout the spare-capacity runs without transport failures.
+The two-connection runs measured admission/transport failures under pressure;
+both targets recovered ordinary requests within 8 ms after clients stopped,
+then passed all slow/streaming recovery checks and completed fixture shutdown.
+This one-minute workload per mode does not establish production capacity or
+long-term resource stability. Raw reports are under ignored
+`conformance/out/sustained-{jvm,native}-final`.
 
 The fuzzing baseline used local changes based on `bfbc050`, with 1000 cases per
 seed and recovery after every case. Both fixtures completed file-triggered
