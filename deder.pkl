@@ -33,8 +33,8 @@ local const core = new CreateCrossModules {
 
 local const fixture: ScalaModule = new {
   id = "fixture-jvm"
-  root = "conformance/shared"
-  sources = new Listing { "." }
+  root = "conformance"
+  sources = new Listing { "shared" }
   scalaVersion = "3.9.0"
   javaVersion = "21"
   javaHome = read("env:JAVA_HOME")

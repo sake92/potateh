@@ -31,7 +31,9 @@ final case class HttpTimeouts(
 ) {
   private val io = List(idle, head, bodyRead, write)
   require(
-    io.forall(d => d.toNanos > 0 && d.toMillis <= Int.MaxValue),
+    io.forall(d =>
+      d.toNanos > 0 && d.toNanos <= Int.MaxValue.toLong * 1000000L
+    ),
     "I/O timeouts must fit socket milliseconds"
   )
   require(

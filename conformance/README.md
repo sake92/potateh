@@ -1,0 +1,153 @@
+# Run external HTTP checks
+
+Use Linux, Java 21, Deder 0.22.2, Scala CLI, clang/libunwind, Git, npm, and
+.NET SDK 10.0.100. External tools stay outside the library and under ignored
+`conformance/out`. Build both fixtures and the Scala runner:
+
+```sh
+mkdir -p conformance/out
+deder exec -m fixture-jvm -t assembly
+deder exec -m fixture-native -t nativeLink
+.deder/out/fixture-native/nativeLink/fixture-native --smoke
+scala --power package conformance/run.scala --server=false --assembly \
+  -o conformance/out/runner.jar
+```
+
+Do not replace a runner JAR while a run using it is active. For another build,
+use a different filename. Native uses release-fast mode with multithreading.
+The CLI uses [mainargs](https://github.com/com-lihaoyi/mainargs) for typed options,
+ujson for raw report inspection and Ant Commandline for quoted command splitting;
+all three are pinned in `run.scala`. `--server` is split without a shell.
+
+Prepare the pinned suites:
+
+```sh
+npm install --prefix conformance/out/tools deno@2.5.6
+git clone https://github.com/uNetworking/h1spec.git conformance/out/h1spec
+git -C conformance/out/h1spec checkout f0a5650a20c575fbea0f7179a3a9cfa50f20ba6e
+git clone https://github.com/MDA2AV/Http11Probe.git conformance/out/Http11Probe
+git -C conformance/out/Http11Probe checkout d50d818a0e008e9feb3bb9860ad5d9cc40342bc3
+dotnet build conformance/out/Http11Probe/src/Http11Probe.Cli -c Release
+git clone https://github.com/shekyan/slowhttptest.git conformance/out/slowhttptest
+git -C conformance/out/slowhttptest checkout 17e8bd195e8c7fd3e0e925686c051e4d591c838f
+(cd conformance/out/slowhttptest && ./configure && \
+  make -j2 ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true)
+```
+
+The runner verifies exact revisions and tracked cleanliness. h1spec has no
+license file at its pinned revision; Http11Probe is MIT and slowhttptest is
+Apache-2.0. No external suite sources or previous server results are vendored.
+
+Run each suite with a new output directory:
+
+```sh
+java -jar conformance/out/runner.jar --suite h1spec \
+  --checkout conformance/out/h1spec \
+  --deno conformance/out/tools/node_modules/.bin/deno \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/native-h1spec
+
+java -jar conformance/out/runner.jar --suite http11probe \
+  --checkout conformance/out/Http11Probe \
+  --probe-dll conformance/out/Http11Probe/src/Http11Probe.Cli/bin/Release/net10.0/Http11Probe.Cli.dll \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/native-probe
+
+java -jar conformance/out/runner.jar --suite slowclients \
+  --idle-drip-expectation close \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/native-slow
+
+java -jar conformance/out/runner.jar --suite slowhttptest --duration 5 \
+  --checkout conformance/out/slowhttptest \
+  --server .deder/out/fixture-native/nativeLink/fixture-native \
+  --output conformance/out/native-slowtool
+```
+
+For JVM, replace each `--server` value with
+`'java -jar .deder/out/fixture-jvm/assembly/out.jar'` and choose fresh directories.
+`--dotnet` accepts an SDK executable path. `--help` lists all options.
+
+Readiness is capped at 30 seconds and probe invocations at 900 seconds by default.
+The runner captures original logs/JSON and returns nonzero for failed verdicts,
+including unscored Http11Probe failures despite its zero process exit code.
+It stops owned process groups and reaps direct children on normal completion,
+failure, timeout and interruption. Interrupted output is diagnostic, not a
+completed result.
+
+Slow-client scenarios cover silent/dripped heads, idle keep-alive, stalled fixed
+and chunked bodies, trailers, stopped response readers, recovery and blocked-I/O
+shutdown. `--capacity both|roomy|limited` selects fixture admission of 128 or 2
+connections; both run by default. Four pressure connections exercise rejection
+in limited mode. There is no executor queue. Body/write scenarios require seeing
+two admitted active workers. `--case NAME` selects cases; `--duration 3` through
+`30` controls the pressure window. `idle-drip` always takes 32 seconds.
+Recovery and process shutdown must complete within five seconds. Availability
+samples under pressure remain measurements, not pass/fail resilience claims.
+
+# Interpret results
+
+h1spec uses one socket read and a 500 ms timeout per case. Valid fragmented
+responses can fail that assumption; confirm with a complete response reader.
+Http11Probe runs Compliance, Smuggling, MalformedInput, Normalization and
+Capabilities. Cookies and WebSockets are outside the fixture/core. Caching,
+compression and conditional-response warnings describe application capabilities.
+Its `total` includes category-filtered skips: count executed cases as
+`total - skipped`, and inspect raw verdicts as well as scored summaries.
+
+An empty Host remains accepted. The probe's `COMP-HOST-EMPTY-VALUE` expects
+rejection, but [RFC 9112 section 3.2](https://www.rfc-editor.org/rfc/rfc9112.html#section-3.2)
+requires an empty Host when the target authority is missing or undefined, and
+requires rejection of missing, repeated or invalid Host fields. We interpret
+this as permitting the empty value rather than requiring blanket rejection. This disagreement remains visible as a failed
+probe and a nonzero runner exit, without changing suite expectations.
+
+Local results are recorded below. Remote CI and other operating systems require
+separate verification. These are bounded functional diagnostics, not sustained
+load, performance, or complete RFC-conformance proof.
+
+The idle-drip check accepts either EOF/reset or a fully validated bodyless 408
+followed by EOF. It records the 408 wire response; any premature success or
+other response fails. This adapts the source runner's close-only assumption to
+potateh's explicit request-head timeout response.
+
+# Local baseline (2026-11-07)
+
+Linux x86_64, Temurin Java 21.0.10, Deder 0.22.2, Scala 3.9.0,
+Native 0.5.12 release-fast with multithreading:
+
+| Check | JVM | Native |
+| --- | --- | --- |
+| Shared MUnit codec and socket suites | Pass | Pass |
+| Standalone release fixture smoke | HTTP served | Pass |
+| h1spec | 33/33 | 33/33 |
+| Http11Probe (five categories, raw verdicts) | 155 Pass, 40 Warn, 1 Fail | 155 Pass, 40 Warn, 1 Fail |
+| slowhttptest (three modes, two admission capacities) | 6/6 | 6/6 |
+| slowclients (ten cases, two admission capacities) | 20/20 | 20/20 |
+
+Http11Probe executed 196 distinct tests per target, excluding 17 cookie/WebSocket
+cases. Its one failure is the empty-Host disagreement above; both runner exits
+remain 1. The original scored/unscored verdicts and warnings remain untouched.
+
+Raw local artifacts are ignored under `conformance/out`: `jvm-h1spec-ready`,
+`native-h1spec-ready`, `jvm-probe-ready`, `native-probe-ready`, `jvm-slowtool-ready`,
+`native-slowtool-ready`, and the final slowclients runs `jvm-slow-ready` and
+`native-slow-ready`. Earlier harness-development runs are diagnostics only. The
+final runner checks the new fixture's completed-stop marker and allows only a
+validated 408 plus EOF as an early idle-drip deadline rejection.
+
+Native TERM cleanup of the parked long-running fixture emitted an
+`IllegalMonitorStateException` in Scala Native 0.5.12 `Runtime.runHooksConcurrent`
+and `Thread.join`, after the server printed its completed-stop marker. This is
+an outstanding portability limitation; successful HTTP verdicts do not establish
+clean signal shutdown. Explicit `Server.stop()`, the release smoke, and
+file-triggered slow-client fixture shutdown are checked separately. No release
+readiness or remote CI claim follows from these local results.
+
+The same exception reproduced in three of three TERM trials without potateh:
+a standalone Scala 3.9.0 / Native 0.5.12 multithreaded program containing only
+`Runtime.addShutdownHook(new Thread(() => println("HOOK FINISHED")))` and
+`new java.util.concurrent.CountDownLatch(1).await()`. Each hook finished before
+the runtime exception and process exit 1. This isolates the parked-main TERM
+failure from the HTTP server. It remains a Native runtime limitation rather
+than a passing shutdown result for that fixture profile.

@@ -72,7 +72,7 @@ failures abort the connection without a second response.
 
 Connections run concurrently on server-owned platform threads, bounded by
 `maxConnections`; each connection runs exchanges sequentially. There is no
-accepted-socket work queue. The OS listen backlog is separate from admission.
+accepted-socket work queue. The OS listen backlog is 128, separate from application admission.
 The initial head deadline starts when the connection worker begins. On a reused
 connection, the idle timeout covers waiting for the first byte; receiving it
 starts a fresh absolute monotonic head deadline. Bytes trickled during the head

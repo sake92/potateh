@@ -15,7 +15,7 @@ object Server {
     val socket = new ServerSocket()
     try {
       socket.setReuseAddress(true)
-      socket.bind(config.bindAddress, config.maxConnections)
+      socket.bind(config.bindAddress, 128)
       val engine = new internal.BlockingServer(socket, config, handle)
       engine.start()
       new Server(engine)

@@ -21,6 +21,9 @@ class ModelTest extends munit.FunSuite {
     intercept[IllegalArgumentException](ServerConfig(maxConnections = 0))
     intercept[IllegalArgumentException](HttpLimits(bodyBytes = Some(-1)))
     intercept[IllegalArgumentException](HttpTimeouts(head = Duration.Zero))
+    intercept[IllegalArgumentException](
+      HttpTimeouts(head = Int.MaxValue.toLong.millis + 1.nanosecond)
+    )
     intercept[IllegalArgumentException](ResponseBody.Writer(Some(-1))(_ => ()))
   }
   test("platform threads publish and join on both targets") {

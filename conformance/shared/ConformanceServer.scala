@@ -116,7 +116,9 @@ object ConformanceServer {
       } else new CountDownLatch(1).await()
     } finally {
       cleanup()
-      Runtime.getRuntime.removeShutdownHook(hook)
+      // Native may unwind the main wait while its TERM shutdown hook runs.
+      try Runtime.getRuntime.removeShutdownHook(hook)
+      catch { case _: IllegalStateException => () }
     }
   }
 }

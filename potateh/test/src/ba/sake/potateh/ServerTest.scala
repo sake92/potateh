@@ -766,4 +766,29 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+
+  test(
+    "admission saturation rejects a connection burst without queueing callbacks"
+  ) {
+    val entered = new CountDownLatch(2)
+    val release = new CountDownLatch(1)
+    val calls = new AtomicInteger
+    withServer(config.copy(maxConnections = 2)) { _ =>
+      calls.incrementAndGet(); entered.countDown(); await(release);
+      response("ok")
+    } { server =>
+      try
+        withSocket(server) { first =>
+          withSocket(server) { second =>
+            send(first, get()); send(second, get()); await(entered)
+            (0 until 8).foreach(_ => withSocket(server)(closed))
+            assertEquals(calls.get(), 2)
+            release.countDown()
+            assertEquals(receive(first).body, "ok")
+            assertEquals(receive(second).body, "ok")
+          }
+        }
+      finally release.countDown()
+    }
+  }
 }

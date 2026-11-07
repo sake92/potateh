@@ -159,4 +159,19 @@ class ResponseHeadWriterTest extends munit.FunSuite {
     intercept[IllegalArgumentException](httpDate(Long.MinValue))
     intercept[IllegalArgumentException](httpDate(Long.MaxValue))
   }
+
+  test(
+    "failing chunked writers do not emit completion and escaped streams are invalid"
+  ) {
+    val sink = new ByteArrayOutputStream
+    var escaped: Option[OutputStream] = None
+    val body = ResponseBody.Writer() { out =>
+      escaped = Some(out)
+      out.write('x')
+      throw new IllegalStateException("writer failed")
+    }
+    intercept[IllegalStateException](writeBody(sink, body, Chunked))
+    assertEquals(text(sink.toByteArray), "1\r\nx\r\n")
+    escaped.foreach(out => intercept[IOException](out.write('y')))
+  }
 }

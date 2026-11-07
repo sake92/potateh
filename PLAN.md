@@ -127,3 +127,16 @@ The same core callback API serves HTTP on JVM/Java 21 and Scala Native; relevant
   The release-fast Native fixture linked and served its loopback smoke request
   successfully. CI now includes that release fixture check; remote CI has not
   been run for these changes.
+- Checkpoint 5: Scala conformance runner and shared Deder fixtures adapted.
+  Fresh Linux runs on each target: h1spec 33/33, slowclients 20/20 and
+  slowhttptest 6/6. Http11Probe executes 196 cases per target with 155 Pass,
+  40 Warn and one retained empty-Host disagreement; the runner returns 1.
+  Commands, qualifications and ignored raw-artifact locations are recorded in
+  conformance/README.md. All committed scripts are Scala.
+  Native TERM shutdown of the parked fixture still exposes a runtime monitor
+  exception after explicit stop completes; a standalone hook/latch reproducer
+  without potateh fails in three of three TERM trials. This remains documented
+  in TODO.md.
+  Explicit shutdown and file-triggered fixture cleanup pass. CI configuration is
+  provided, but remote CI and macOS/Windows have not been verified, so this is
+  not a claim of release readiness.

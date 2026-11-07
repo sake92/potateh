@@ -121,14 +121,27 @@ private[potateh] object ResponseHeadWriter {
         }
       case NoBody => throw new IllegalStateException()
     }
-    // Even a failing callback must invalidate an escaped output stream.
-    try
+    var live = true
+    val scoped = new OutputStream {
+      private def check(): Unit = if (!live)
+        throw new java.io.IOException("Response body escaped its exchange")
+      override def write(value: Int): Unit = { check(); stream.write(value) }
+      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
+        check(); stream.write(bytes, offset, length)
+      }
+      override def flush(): Unit = { check(); stream.flush() }
+      override def close(): Unit = { check(); stream.close() }
+    }
+    // Only successful writers finalize framing. A failing chunked writer must
+    // not emit a terminating chunk that would make a partial response complete.
+    try {
       body match {
         case ResponseBody.Empty          => ()
-        case bytes: ResponseBody.Bytes   => stream.write(bytes.value)
-        case writer: ResponseBody.Writer => writer.write(stream)
+        case bytes: ResponseBody.Bytes   => scoped.write(bytes.value)
+        case writer: ResponseBody.Writer => writer.write(scoped)
       }
-    finally stream.close()
+      stream.close()
+    } finally live = false
   }
 
   // Native 0.5.12 has no java.text date formatter. Bound the conversion to the

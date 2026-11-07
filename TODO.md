@@ -1,6 +1,6 @@
 # Planned improvements
 
-Implement the initial library using [PLAN.md](PLAN.md). This backlog adapts the source project's TODO to potateh's scope. Unchecked items are outstanding work, not implemented protections or confirmed vulnerabilities. Source-server results do not establish potateh behavior.
+The initial implementation is tracked in [PLAN.md](PLAN.md). This backlog covers subsequent work. Unchecked items are outstanding work, not implemented protections or confirmed vulnerabilities. Source-server results do not establish potateh behavior.
 
 ## Hardening validation
 
@@ -12,11 +12,11 @@ Implement the initial library using [PLAN.md](PLAN.md). This backlog adapts the 
 
 ## Conformance and portability
 
-- [ ] Review the disputed empty-Host expectation against the RFC and with Http11Probe maintainers if applicable to the adapted fixture.
+- [ ] Track/fix upstream Scala Native 0.5.12 TERM shutdown while the fixture main thread is parked: `IllegalMonitorStateException` in Runtime hook joining was observed after `Server.stop()` completed. The same exception reproduces without potateh in a shutdown-hook plus CountDownLatch program. Explicit stop and file-triggered fixture shutdown pass; see conformance/README.md.
+
+- [ ] Discuss the remaining empty-Host expectation disagreement with Http11Probe maintainers; the local RFC review is recorded in conformance/README.md.
 - [ ] Establish a repeatable external-suite CI baseline for potateh JVM and Native; distinguish local results from remote CI evidence.
-- [ ] Check whether the source fixture's recorded Scala Native `PosixThread.park` assertion during TERM shutdown reproduces with potateh; investigate if it does.
-- [ ] Exercise incomplete trailers under worker saturation using potateh's configured admission and I/O bounds. Reference-JDK behavior is optional comparison evidence.
-- [ ] Validate Native release-mode builds and macOS/Windows behavior before claiming those platforms are supported.
+- [ ] Validate macOS/Windows behavior before claiming those platforms are supported. Linux release-mode Native builds are exercised locally.
 
 JDK 8/Scala 2 compatibility, protected-realm mutation, Java binary compatibility and upstream JDK API placement are intentionally dropped from the source backlog. HTTPS, HTTP/2, provider discovery, upgrades/WebSockets and CONNECT tunnels remain exclusions, not planned commitments.
 

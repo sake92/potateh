@@ -63,7 +63,7 @@ private[potateh] final class Exchange(
     }
     override def skip(count: Long): Long = if (count <= 0) { check(); 0L }
     else consume(framed.skip(count))
-    override def available(): Int = { check(); framed.available() }
+    override def available(): Int = { check(); guard(framed.available()) }
     override def close(): Unit = { closed = true; framed.close() }
     private def checkLifetime(): Unit =
       if (!live) throw new IOException("Request body escaped its exchange")
@@ -74,7 +74,7 @@ private[potateh] final class Exchange(
     }
     private def consume[A](operation: => A): A = {
       check()
-      try {
+      guard {
         if (
           !complete && !continued && headers
             .all("Expect")
@@ -88,7 +88,11 @@ private[potateh] final class Exchange(
           math.max(1L, config.timeouts.bodyRead.toMillis).toInt
         )
         operation
-      } catch {
+      }
+    }
+    private def guard[A](operation: => A): A = {
+      try operation
+      catch {
         case error: IOException =>
           failure = Some(error)
           val code = error match {
