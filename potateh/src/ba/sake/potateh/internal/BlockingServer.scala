@@ -229,12 +229,19 @@ private[potateh] final class BlockingServer(
         }
         first = false
         val headInput = new InputStream {
+          private var readTimeoutMillis = 0
+
           override def read(): Int = {
             val remaining = deadline - System.nanoTime()
             if (remaining <= 0) {
               throw new SocketTimeoutException("Request head deadline exceeded")
             }
-            socket.setSoTimeout(millis(remaining).toInt)
+            val timeoutMillis = millis(remaining).toInt
+            // Native sets SO_RCVTIMEO on every call, even when the value is unchanged.
+            if (timeoutMillis != readTimeoutMillis) {
+              socket.setSoTimeout(timeoutMillis)
+              readTimeoutMillis = timeoutMillis
+            }
             val byte = input.read()
             if (deadline - System.nanoTime() <= 0) {
               throw new SocketTimeoutException("Request head deadline exceeded")

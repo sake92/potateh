@@ -756,6 +756,25 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("request head deadline is reapplied after a persistent body read") {
+    val settings = config.withTimeouts(
+      config.timeouts.withIdle(3.seconds).withHead(200.millis).withBodyRead(3.seconds)
+    )
+    withServer(settings) { request =>
+      request.body.transferTo(new ByteArrayOutputStream)
+      response("ok")
+    } { server =>
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\n\r\nx")
+        assertEquals(receive(socket).body, "ok")
+        val started = System.nanoTime()
+        send(socket, "GET / HTTP/1.1\r\nHost:")
+        assertEquals(receive(socket).status, 408)
+        assert((System.nanoTime() - started).nanos < 1500.millis)
+        closed(socket)
+      }
+    }
+  }
   test("silent and idle persistent connections close and release admission") {
     withServer(config.withMaxConnections(1))(_ => response("ok")) { server =>
       withSocket(server)(closed)
