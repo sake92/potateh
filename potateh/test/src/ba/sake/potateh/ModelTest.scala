@@ -77,6 +77,7 @@ class ModelTest extends munit.FunSuite {
   }
   test("configuration rejects invalid bounds before binding") {
     intercept[IllegalArgumentException](ServerConfig.Default.withMaxConnections(0))
+    for (backlog <- List(0, -1)) intercept[IllegalArgumentException](ServerConfig.Default.withBacklog(backlog))
     intercept[IllegalArgumentException](HttpLimits.Default.withBodyBytes(Some(-1)))
     intercept[IllegalArgumentException](HttpTimeouts.Default.withHead(Duration.Zero))
     intercept[IllegalArgumentException](
@@ -85,7 +86,10 @@ class ModelTest extends munit.FunSuite {
     intercept[IllegalArgumentException](ResponseBody.Writer(Some(-1))(_ => ()))
   }
   test("configuration updates preserve unrelated settings and validate new bounds") {
+    val reporter: Throwable => Unit = _ => ()
     val original = ServerConfig.Default
+      .withBacklog(257)
+      .withOnError(reporter)
       .withMaxConnections(17)
       .withLimits(HttpLimits.Default.withHeaderCount(23))
       .withTimeouts(HttpTimeouts.Default.withHead(7.seconds))
@@ -94,6 +98,9 @@ class ModelTest extends munit.FunSuite {
       .withLimits(original.limits.withBodyBytes(None))
       .withTimeouts(original.timeouts.withWrite(11.seconds))
     assertEquals(changed.maxConnections, 19)
+    assertEquals(changed.backlog, 257)
+    assert(changed.onError eq reporter)
+    assertEquals(ServerConfig.Default.backlog, 128)
     assertEquals(changed.bindAddress, original.bindAddress)
     assertEquals(changed.limits.headerCount, 23)
     assertEquals(changed.limits.bodyBytes, None)

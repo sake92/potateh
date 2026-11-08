@@ -187,7 +187,9 @@ private[potateh] final class Exchange(
       output.flush()
       persistent && !prepared.closes && complete
     } catch {
-      case NonFatal(_) =>
+      case NonFatal(error) =>
+        try config.onError(error)
+        catch { case NonFatal(_) => () }
         try reject(500)
         catch { case NonFatal(_) => () }
         false

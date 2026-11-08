@@ -37,6 +37,10 @@ a JVM virtual-thread executor. Queued and running connections both count toward
 `maxConnections`; excess connections and rejected submissions are closed.
 Supplied executors must execute tasks or reject by throwing, rather than silently
 discarding them. Inline execution serves connections on the accept thread.
+Idle persistent connections retain both their worker and their admission slot;
+a small fixed pool can therefore stall requests even below `maxConnections`.
+The listener backlog is a separate OS queue, configured with `withBacklog`
+(default 128); the OS may cap or ignore the requested size.
 The initial head deadline starts when a connection task begins; executor queue
 waiting is outside the I/O timeout budget.
 The parser enforces an absolute request-head deadline; body reads use socket
@@ -47,6 +51,13 @@ The exchange owns stream lifetimes and protocol decisions, including lazy
 `100 Continue`, bodyless responses and connection reuse. A response writer may
 still consume the request body. Unread request bodies and terminal framing
 failures prevent reuse; unread bodies are not drained.
+Exceptions caught during an exchange are reported through `ServerConfig.onError`
+(default: print the stack trace to stderr). Reporting runs synchronously on the
+connection worker and may run concurrently across connections. Nonfatal reporter
+exceptions are ignored. Before commitment, exchange failure produces a 500 unless
+a body-read failure already selected a protocol error; after commitment it closes
+the connection without a second response. Parser errors and failures outside the
+exchange are not delivered to this callback.
 
 `Server.stop()` stops admission, closes idle/head-reading connections, allows
 active exchanges the configured shutdown grace, then closes remaining sockets.

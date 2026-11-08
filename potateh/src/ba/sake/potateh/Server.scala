@@ -32,7 +32,7 @@ object Server {
     val socket = new ServerSocket()
     try {
       socket.setReuseAddress(true)
-      socket.bind(config.bindAddress, 128)
+      socket.bind(config.bindAddress, config.backlog)
       val engine = new internal.BlockingServer(socket, config, executor, handle)
       engine.start()
       new Server(engine)

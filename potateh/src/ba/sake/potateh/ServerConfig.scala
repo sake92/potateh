@@ -164,17 +164,32 @@ object HttpTimeouts {
 final class ServerConfig private (
     val bindAddress: InetSocketAddress,
     val maxConnections: Int,
+    val backlog: Int,
+    val onError: Throwable => Unit,
     val limits: HttpLimits,
     val timeouts: HttpTimeouts
 ) {
   require(!bindAddress.isUnresolved, "Unresolved bind address")
   require(maxConnections > 0, "maxConnections must be positive")
+  require(backlog > 0, "backlog must be positive")
 
   def withBindAddress(value: InetSocketAddress): ServerConfig = {
     copy(bindAddress = value)
   }
   def withMaxConnections(value: Int): ServerConfig = {
     copy(maxConnections = value)
+  }
+
+  /** Requested listener queue size; the operating system may cap it. Independent of maxConnections. */
+  def withBacklog(value: Int): ServerConfig = {
+    copy(backlog = value)
+  }
+
+  /** Reports exchange failures synchronously on the connection worker. May run concurrently. Keep this callback short;
+    * nonfatal exceptions from it are ignored.
+    */
+  def withOnError(value: Throwable => Unit): ServerConfig = {
+    copy(onError = value)
   }
   def withLimits(value: HttpLimits): ServerConfig = {
     copy(limits = value)
@@ -186,12 +201,16 @@ final class ServerConfig private (
   private def copy(
       bindAddress: InetSocketAddress = this.bindAddress,
       maxConnections: Int = this.maxConnections,
+      backlog: Int = this.backlog,
+      onError: Throwable => Unit = this.onError,
       limits: HttpLimits = this.limits,
       timeouts: HttpTimeouts = this.timeouts
   ): ServerConfig = {
     new ServerConfig(
       bindAddress,
       maxConnections,
+      backlog,
+      onError,
       limits,
       timeouts
     )
@@ -202,6 +221,8 @@ object ServerConfig {
   val Default: ServerConfig = new ServerConfig(
     bindAddress = new InetSocketAddress("127.0.0.1", 8080),
     maxConnections = 128,
+    backlog = 128,
+    onError = _.printStackTrace(),
     limits = HttpLimits.Default,
     timeouts = HttpTimeouts.Default
   )

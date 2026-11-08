@@ -11,6 +11,7 @@ import scala.concurrent.duration.*
 class ServerTest extends munit.FunSuite {
   override val munitTimeout = 60.seconds
   private val config = ServerConfig.Default
+    .withOnError(_ => ())
     .withBindAddress(new InetSocketAddress("127.0.0.1", 0))
     .withTimeouts(
       HttpTimeouts.Default
@@ -632,6 +633,82 @@ class ServerTest extends munit.FunSuite {
         }
       }
       assertEquals(invoked.get(), 0)
+    }
+  }
+  test("a custom listener backlog serves requests with independent admission limits") {
+    withServer(config.withBacklog(257).withMaxConnections(1))(_ => response("ok")) { server =>
+      withSocket(server) { socket =>
+        send(socket, get())
+        assertEquals(receive(socket).body, "ok")
+        admissionRejected(server)
+        send(socket, get())
+        assertEquals(receive(socket).body, "ok")
+      }
+    }
+  }
+  for (mode <- List("handler", "framing", "writer")) {
+    test(s"$mode failures are reported once with unchanged wire behavior") {
+      val error = new IllegalStateException(mode)
+      val reported = new AtomicReference[Throwable]()
+      val reports = new AtomicInteger
+      val settings = config.withOnError { failure =>
+        reported.set(failure)
+        reports.incrementAndGet()
+        ()
+      }
+      withServer(settings) { _ =>
+        mode match {
+          case "handler" => throw error
+          case "framing" => Response(headers = Headers("Content-Length" -> "999"))
+          case _         =>
+            Response(body = ResponseBody.Writer() { out =>
+              out.write('x')
+              out.flush()
+              throw error
+            })
+        }
+      } { server =>
+        withSocket(server) { socket =>
+          send(socket, get())
+          if (mode == "writer") {
+            val raw = new ByteArrayOutputStream
+            socket.getInputStream.transferTo(raw)
+            val wire = new String(raw.toByteArray, ISO_8859_1)
+            assert(wire.startsWith("HTTP/1.1 200 "))
+            assertEquals(wire.sliding(5).count(_ == "HTTP/"), 1)
+            assert(!wire.endsWith("0\r\n\r\n"))
+          } else {
+            assertEquals(receive(socket).status, 500)
+            closed(socket)
+          }
+          assertEquals(reports.get(), 1)
+          if (mode == "framing") assert(reported.get().isInstanceOf[IllegalArgumentException])
+          else assert(reported.get() eq error)
+        }
+      }
+    }
+  }
+  test("a failing error reporter preserves the 500 response and server recovery") {
+    val reports = new AtomicInteger
+    val settings = config.withOnError { _ =>
+      reports.incrementAndGet()
+      throw new IllegalStateException("reporter")
+    }
+    withServer(settings) { request =>
+      if (request.target == "/fail") throw new IllegalStateException("handler")
+      response("recovered")
+    } { server =>
+      withSocket(server) { socket =>
+        send(socket, get("/fail"))
+        assertEquals(receive(socket).status, 500)
+        closed(socket)
+      }
+      assertEquals(reports.get(), 1)
+      withSocket(server) { socket =>
+        send(socket, get())
+        assertEquals(receive(socket).body, "recovered")
+      }
+      assertEquals(reports.get(), 1)
     }
   }
   test(
