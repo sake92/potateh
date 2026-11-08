@@ -20,15 +20,15 @@ private[potateh] object RequestHeadParser {
   case object Chunked extends BodyFraming
 
   final case class Limits(
-      requestLineBytes: Int = 8192,
-      headerLineBytes: Int = 8192,
-      headerSectionBytes: Int = 65536,
-      headerCount: Int = 100
+      maxRequestLineBytes: Int = 8192,
+      maxHeaderLineBytes: Int = 8192,
+      maxHeaderSectionBytes: Int = 65536,
+      maxHeaderCount: Int = 100
   ) {
-    require(requestLineBytes >= 0, "requestLineBytes must be at least 0")
-    require(headerLineBytes >= 0, "headerLineBytes must be at least 0")
-    require(headerSectionBytes >= 2, "headerSectionBytes must be at least 2")
-    require(headerCount >= 0, "headerCount must be at least 0")
+    require(maxRequestLineBytes >= 0, "maxRequestLineBytes must be at least 0")
+    require(maxHeaderLineBytes >= 0, "maxHeaderLineBytes must be at least 0")
+    require(maxHeaderSectionBytes >= 2, "maxHeaderSectionBytes must be at least 2")
+    require(maxHeaderCount >= 0, "maxHeaderCount must be at least 0")
   }
 
   final case class RequestHead(
@@ -51,7 +51,7 @@ private[potateh] object RequestHeadParser {
     val first = input.read()
     if (first == -1) break(None)
     val line = {
-      readLine(input, first, limits.requestLineBytes, 414, requestLine = true)
+      readLine(input, first, limits.maxRequestLineBytes, 414, requestLine = true)
     }
     val firstSpace = line.indexOf(' ')
     val lastSpace = line.lastIndexOf(' ')
@@ -75,14 +75,14 @@ private[potateh] object RequestHeadParser {
     var count = 0
     var done = false
     while (!done) {
-      val remaining = limits.headerSectionBytes - sectionBytes
+      val remaining = limits.maxHeaderSectionBytes - sectionBytes
       if (remaining < 2) fail(431, "Header section too large")
-      val maximum = math.min(limits.headerLineBytes, remaining - 2)
+      val maximum = math.min(limits.maxHeaderLineBytes, remaining - 2)
       val field = readLine(input, input.read(), maximum, 431)
       sectionBytes += field.length + 2
       if (field.isEmpty) done = true
       else {
-        if (count == limits.headerCount) fail(431, "Too many header fields")
+        if (count == limits.maxHeaderCount) fail(431, "Too many header fields")
         val parsed = {
           HttpSyntax.field(field).getOrElse(fail(400, "Invalid header field"))
         }

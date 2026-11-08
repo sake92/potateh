@@ -29,6 +29,12 @@ Pass a `ServerConfig` to customize the bind address, limits and timeouts.
 Start from `ServerConfig.Default`, `HttpLimits.Default` or `HttpTimeouts.Default`
 and use `withX` methods for immutable updates, for example
 `ServerConfig.Default.withMaxConnections(256)` or `response.withStatus(201)`.
+`HttpLimits` uses `max*` names, such as `maxHeaderCount` and `maxBodyBytes`,
+with updates such as `withMaxHeaderCount(100)` and `withMaxBodyBytes(None)`
+(`None` disables the body size limit).
+`HttpTimeouts` exposes `idleTimeout`, `requestHeadTimeout`, `bodyReadTimeout`,
+`writeTimeout` and `shutdownGrace`, with matching `withX` methods.
+The previous limit and timeout names remain as deprecated aliases.
 
 Callbacks may run concurrently across connections. Body streams belong to their
 exchange; use them only in the callback or synchronous response writer.

@@ -30,13 +30,13 @@ private[potateh] final class Exchange(
       new ChunkedInputStream(
         input,
         ChunkedInputStream.Limits(
-          limits.chunkLineBytes,
-          limits.chunkExtensionBytes,
-          limits.trailerLineBytes,
-          limits.trailerSectionBytes,
-          limits.trailerCount
+          limits.maxChunkLineBytes,
+          limits.maxChunkExtensionBytes,
+          limits.maxTrailerLineBytes,
+          limits.maxTrailerSectionBytes,
+          limits.maxTrailerCount
         ),
-        limits.bodyBytes
+        limits.maxBodyBytes
       )
   }
   private def complete: Boolean = framed match {
@@ -96,7 +96,7 @@ private[potateh] final class Exchange(
           continued = true
         }
         socket.setSoTimeout(
-          math.max(1L, config.timeouts.bodyRead.toMillis).toInt
+          math.max(1L, config.timeouts.bodyReadTimeout.toMillis).toInt
         )
         operation
       }
@@ -122,7 +122,7 @@ private[potateh] final class Exchange(
   def run(): Boolean = boundary {
     try {
       head.framing match {
-        case RequestHeadParser.FixedLength(size) if limits.bodyBytes.exists(size > _) =>
+        case RequestHeadParser.FixedLength(size) if limits.maxBodyBytes.exists(size > _) =>
           reject(413)
           break(false)
         case _ => ()

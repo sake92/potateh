@@ -9,17 +9,17 @@ private[potateh] object ChunkedInputStream {
   final class BodyTooLargeException extends IOException("Request body exceeds configured limit")
 
   final case class Limits(
-      chunkLineBytes: Int = 8192,
-      extensionBytes: Int = 65536,
-      trailerLineBytes: Int = 8192,
-      trailerSectionBytes: Int = 65536,
-      trailerCount: Int = 100
+      maxChunkLineBytes: Int = 8192,
+      maxChunkExtensionBytes: Int = 65536,
+      maxTrailerLineBytes: Int = 8192,
+      maxTrailerSectionBytes: Int = 65536,
+      maxTrailerCount: Int = 100
   ) {
-    require(chunkLineBytes >= 1, "chunkLineBytes must be at least 1")
-    require(extensionBytes >= 0, "extensionBytes must be at least 0")
-    require(trailerLineBytes >= 0, "trailerLineBytes must be at least 0")
-    require(trailerSectionBytes >= 2, "trailerSectionBytes must be at least 2")
-    require(trailerCount >= 0, "trailerCount must be at least 0")
+    require(maxChunkLineBytes >= 1, "maxChunkLineBytes must be at least 1")
+    require(maxChunkExtensionBytes >= 0, "maxChunkExtensionBytes must be at least 0")
+    require(maxTrailerLineBytes >= 0, "maxTrailerLineBytes must be at least 0")
+    require(maxTrailerSectionBytes >= 2, "maxTrailerSectionBytes must be at least 2")
+    require(maxTrailerCount >= 0, "maxTrailerCount must be at least 0")
   }
 
 }
@@ -105,7 +105,7 @@ private[potateh] final class ChunkedInputStream(
     if (complete) break(false)
     if (remaining > 0) break(true)
     if (needsDelimiter) expectCrlf()
-    val line = readLine(limits.chunkLineBytes)
+    val line = readLine(limits.maxChunkLineBytes)
     var index = 0
     var size = 0L
     while (index < line.length && hexDigit(line.charAt(index)) >= 0) {
@@ -116,7 +116,7 @@ private[potateh] final class ChunkedInputStream(
     }
     if (index == 0) invalid("Missing chunk size")
     val extra = line.length - index
-    if (extra > limits.extensionBytes - extensionBytes) {
+    if (extra > limits.maxChunkExtensionBytes - extensionBytes) {
       invalid("Too much chunk extension text")
     }
     extensionBytes += extra
@@ -189,14 +189,14 @@ private[potateh] final class ChunkedInputStream(
     var count = 0
     var ended = false
     while (!ended) {
-      val remainingBytes = limits.trailerSectionBytes - bytes
+      val remainingBytes = limits.maxTrailerSectionBytes - bytes
       if (remainingBytes < 2) invalid("Trailer section too large")
-      val maximum = math.min(limits.trailerLineBytes, remainingBytes - 2)
+      val maximum = math.min(limits.maxTrailerLineBytes, remainingBytes - 2)
       val line = readLine(maximum)
       bytes += line.length + 2
       if (line.isEmpty) ended = true
       else {
-        if (count == limits.trailerCount) invalid("Too many trailer fields")
+        if (count == limits.maxTrailerCount) invalid("Too many trailer fields")
         val field = {
           HttpSyntax.field(line).getOrElse(invalid("Invalid trailer field"))
         }

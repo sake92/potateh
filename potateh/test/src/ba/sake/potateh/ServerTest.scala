@@ -15,10 +15,10 @@ class ServerTest extends munit.FunSuite {
     .withBindAddress(new InetSocketAddress("127.0.0.1", 0))
     .withTimeouts(
       HttpTimeouts.Default
-        .withIdle(500.millis)
-        .withHead(500.millis)
-        .withBodyRead(500.millis)
-        .withWrite(500.millis)
+        .withIdleTimeout(500.millis)
+        .withRequestHeadTimeout(500.millis)
+        .withBodyReadTimeout(500.millis)
+        .withWriteTimeout(500.millis)
         .withShutdownGrace(1.second)
     )
   private def response(text: String): Response = {
@@ -337,7 +337,7 @@ class ServerTest extends munit.FunSuite {
     val entered = new CountDownLatch(1)
     val ended = new CountDownLatch(1)
     val settings = config.withTimeouts(
-      config.timeouts.withBodyRead(10.seconds).withShutdownGrace(100.millis)
+      config.timeouts.withBodyReadTimeout(10.seconds).withShutdownGrace(100.millis)
     )
     val server = Server.start(settings, executor) { request =>
       entered.countDown()
@@ -482,7 +482,7 @@ class ServerTest extends munit.FunSuite {
     "oversized declared bodies and unsupported expectations skip dispatch and continuation"
   ) {
     val calls = new AtomicInteger
-    withServer(config.withLimits(HttpLimits.Default.withBodyBytes(Some(3))))(_ => {
+    withServer(config.withLimits(HttpLimits.Default.withMaxBodyBytes(Some(3))))(_ => {
       calls.incrementAndGet()
       response("bad")
     }) { server =>
@@ -506,7 +506,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (mode <- List("single", "bulk", "skip")) {
       val calls = new AtomicInteger
-      withServer(config.withLimits(HttpLimits.Default.withBodyBytes(Some(3)))) { request =>
+      withServer(config.withLimits(HttpLimits.Default.withMaxBodyBytes(Some(3)))) { request =>
         calls.incrementAndGet()
         try {
           mode match {
@@ -732,7 +732,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (mode <- List("underflow", "overflow", "throw", "body-failure")) {
       val calls = new AtomicInteger
-      withServer(config.withLimits(HttpLimits.Default.withBodyBytes(Some(1)))) { request =>
+      withServer(config.withLimits(HttpLimits.Default.withMaxBodyBytes(Some(1)))) { request =>
         calls.incrementAndGet()
         Response(body = ResponseBody.Writer(Some(2)) { out =>
           out.write('x')
@@ -835,7 +835,7 @@ class ServerTest extends munit.FunSuite {
   }
   test("request head deadline is reapplied after a persistent body read") {
     val settings = config.withTimeouts(
-      config.timeouts.withIdle(3.seconds).withHead(200.millis).withBodyRead(3.seconds)
+      config.timeouts.withIdleTimeout(3.seconds).withRequestHeadTimeout(200.millis).withBodyReadTimeout(3.seconds)
     )
     withServer(settings) { request =>
       request.body.transferTo(new ByteArrayOutputStream)
@@ -986,7 +986,7 @@ class ServerTest extends munit.FunSuite {
     val entered = new CountDownLatch(1)
     val ended = new CountDownLatch(1)
     val settings = config.withTimeouts(
-      config.timeouts.withBodyRead(10.seconds).withShutdownGrace(200.millis)
+      config.timeouts.withBodyReadTimeout(10.seconds).withShutdownGrace(200.millis)
     )
     val server = Server.start(settings) { request =>
       entered.countDown()
@@ -1081,7 +1081,7 @@ class ServerTest extends munit.FunSuite {
   ) {
     for (limit <- List(Some(3L), None)) {
       val payload = if (limit.nonEmpty) "abc" else "x" * (1024 * 1024 + 1)
-      withServer(config.withLimits(HttpLimits.Default.withBodyBytes(limit))) { request =>
+      withServer(config.withLimits(HttpLimits.Default.withMaxBodyBytes(limit))) { request =>
         val sink = new ByteArrayOutputStream
         request.body.transferTo(sink)
         response(sink.size().toString)
@@ -1112,7 +1112,7 @@ class ServerTest extends munit.FunSuite {
     }
   }
   test("Some zero permits empty bodies and rejects chunked payloads") {
-    withServer(config.withLimits(HttpLimits.Default.withBodyBytes(Some(0)))) { request =>
+    withServer(config.withLimits(HttpLimits.Default.withMaxBodyBytes(Some(0)))) { request =>
       request.body.transferTo(new ByteArrayOutputStream)
       response("ok")
     } { server =>
@@ -1158,7 +1158,7 @@ class ServerTest extends munit.FunSuite {
     val ended = new CountDownLatch(1)
     val server = Server.start(
       config.withTimeouts(
-        config.timeouts.withWrite(10.seconds).withShutdownGrace(200.millis)
+        config.timeouts.withWriteTimeout(10.seconds).withShutdownGrace(200.millis)
       )
     ) { _ =>
       Response(body = ResponseBody.Writer() { out =>

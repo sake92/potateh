@@ -179,18 +179,18 @@ class RequestHeadParserTest extends munit.FunSuite {
   test("enforcesLimitsAtBoundaries") {
     val wire = "GET / HTTP/1.1\r\nHost: x\r\nX: y\r\n\r\n"
     val limits = Limits(
-      requestLineBytes = 14,
-      headerLineBytes = 7,
-      headerSectionBytes = 17,
-      headerCount = 2
+      maxRequestLineBytes = 14,
+      maxHeaderLineBytes = 7,
+      maxHeaderSectionBytes = 17,
+      maxHeaderCount = 2
     )
     assertEquals(parse(wire, limits).framing, NoBody)
-    rejected(wire, 414, limits.copy(requestLineBytes = 13))
-    rejected(wire, 431, limits.copy(headerLineBytes = 6))
-    rejected(wire, 431, limits.copy(headerSectionBytes = 16))
-    rejected(wire, 431, limits.copy(headerCount = 1))
+    rejected(wire, 414, limits.copy(maxRequestLineBytes = 13))
+    rejected(wire, 431, limits.copy(maxHeaderLineBytes = 6))
+    rejected(wire, 431, limits.copy(maxHeaderSectionBytes = 16))
+    rejected(wire, 431, limits.copy(maxHeaderCount = 1))
     val emptyHeaders = {
-      Limits(headerLineBytes = 0, headerSectionBytes = 2, headerCount = 0)
+      Limits(maxHeaderLineBytes = 0, maxHeaderSectionBytes = 2, maxHeaderCount = 0)
     }
     assertEquals(parse("GET / HTTP/1.0\r\n\r\n", emptyHeaders).framing, NoBody)
     rejected("GET / HTTP/1.0\r\nX: y\r\n\r\n", 431, emptyHeaders)

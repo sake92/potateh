@@ -188,19 +188,19 @@ class ChunkedInputStreamTest extends munit.FunSuite {
   test("enforcesMetadataLimits") {
     val wire = "1;a=b\r\nx\r\n0;c\r\nX: y\r\n\r\n"
     val limits = Limits(
-      chunkLineBytes = 5,
-      extensionBytes = 6,
-      trailerLineBytes = 4,
-      trailerSectionBytes = 8,
-      trailerCount = 1
+      maxChunkLineBytes = 5,
+      maxChunkExtensionBytes = 6,
+      maxTrailerLineBytes = 4,
+      maxTrailerSectionBytes = 8,
+      maxTrailerCount = 1
     )
     assertEquals(drain(new ChunkedInputStream(stream(wire), limits)), "x")
     List(
-      limits.copy(chunkLineBytes = 4),
-      limits.copy(extensionBytes = 5),
-      limits.copy(trailerLineBytes = 3),
-      limits.copy(trailerSectionBytes = 7),
-      limits.copy(trailerCount = 0)
+      limits.copy(maxChunkLineBytes = 4),
+      limits.copy(maxChunkExtensionBytes = 5),
+      limits.copy(maxTrailerLineBytes = 3),
+      limits.copy(maxTrailerSectionBytes = 7),
+      limits.copy(maxTrailerCount = 0)
     ).foreach { tooSmall =>
       intercept[ProtocolException] {
         drain(new ChunkedInputStream(stream(wire), tooSmall))
@@ -211,11 +211,11 @@ class ChunkedInputStreamTest extends munit.FunSuite {
         new ChunkedInputStream(
           stream("0\r\n\r\n"),
           Limits(
-            chunkLineBytes = 1,
-            extensionBytes = 0,
-            trailerLineBytes = 0,
-            trailerSectionBytes = 2,
-            trailerCount = 0
+            maxChunkLineBytes = 1,
+            maxChunkExtensionBytes = 0,
+            maxTrailerLineBytes = 0,
+            maxTrailerSectionBytes = 2,
+            maxTrailerCount = 0
           )
         )
       ),

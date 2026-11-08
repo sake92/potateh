@@ -57,7 +57,7 @@ private[potateh] final class BlockingServer(
       val pool = Executors.newCachedThreadPool(task => new Thread(task, "potateh-connection"))
       (executor = pool: Executor, ownedExecutor = Some(pool))
   }
-  private val writes = new WriteTimeouts(config.timeouts.write.toNanos)
+  private val writes = new WriteTimeouts(config.timeouts.writeTimeout.toNanos)
   private val acceptThread = new Thread(() => accept(), "potateh-accept")
   val address: InetSocketAddress = {
     listener.getLocalSocketAddress().asInstanceOf[InetSocketAddress]
@@ -215,17 +215,17 @@ private[potateh] final class BlockingServer(
       var reuse = true
       while (reuse && running) {
         val headStart = System.nanoTime()
-        socket.setSoTimeout(millis(config.timeouts.idle.toNanos).toInt)
+        socket.setSoTimeout(millis(config.timeouts.idleTimeout.toNanos).toInt)
         // Initial silent sockets are bounded by the absolute head deadline.
         if (first) {
-          socket.setSoTimeout(millis(config.timeouts.head.toNanos).toInt)
+          socket.setSoTimeout(millis(config.timeouts.requestHeadTimeout.toNanos).toInt)
         }
         val next = input.read()
         if (next == -1) break()
         input.unread(next)
         val deadline = {
-          if (first) headStart + config.timeouts.head.toNanos
-          else System.nanoTime() + config.timeouts.head.toNanos
+          if (first) headStart + config.timeouts.requestHeadTimeout.toNanos
+          else System.nanoTime() + config.timeouts.requestHeadTimeout.toNanos
         }
         first = false
         val headInput = new InputStream {
@@ -254,10 +254,10 @@ private[potateh] final class BlockingServer(
           RequestHeadParser.read(
             headInput,
             RequestHeadParser.Limits(
-              limits.requestLineBytes,
-              limits.headerLineBytes,
-              limits.headerSectionBytes,
-              limits.headerCount
+              limits.maxRequestLineBytes,
+              limits.maxHeaderLineBytes,
+              limits.maxHeaderSectionBytes,
+              limits.maxHeaderCount
             )
           )
         } catch {

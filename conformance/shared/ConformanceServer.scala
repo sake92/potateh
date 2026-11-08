@@ -32,32 +32,32 @@ object ConformanceServer {
       .withMaxConnections(if (slow && capacity == "limited") 2 else 128)
       .withLimits(if (fuzz) {
         HttpLimits.Default
-          .withRequestLineBytes(128)
-          .withHeaderLineBytes(128)
-          .withHeaderSectionBytes(512)
-          .withHeaderCount(8)
-          .withChunkLineBytes(64)
-          .withChunkExtensionBytes(96)
-          .withTrailerLineBytes(64)
-          .withTrailerSectionBytes(128)
-          .withTrailerCount(4)
-          .withBodyBytes(Some(256))
-      } else HttpLimits.Default.withBodyBytes(Some(8L * 1024 * 1024)))
+          .withMaxRequestLineBytes(128)
+          .withMaxHeaderLineBytes(128)
+          .withMaxHeaderSectionBytes(512)
+          .withMaxHeaderCount(8)
+          .withMaxChunkLineBytes(64)
+          .withMaxChunkExtensionBytes(96)
+          .withMaxTrailerLineBytes(64)
+          .withMaxTrailerSectionBytes(128)
+          .withMaxTrailerCount(4)
+          .withMaxBodyBytes(Some(256))
+      } else HttpLimits.Default.withMaxBodyBytes(Some(8L * 1024 * 1024)))
       .withTimeouts(if (fuzz) {
         HttpTimeouts.Default
-          .withIdle(2.seconds)
-          .withHead(2.seconds)
-          .withBodyRead(2.seconds)
+          .withIdleTimeout(2.seconds)
+          .withRequestHeadTimeout(2.seconds)
+          .withBodyReadTimeout(2.seconds)
           .withShutdownGrace(200.millis)
       } else if (sustained) {
         HttpTimeouts.Default
-          .withIdle(2.seconds)
-          .withHead(1.second)
-          .withBodyRead(1.second)
-          .withWrite(1.second)
+          .withIdleTimeout(2.seconds)
+          .withRequestHeadTimeout(1.second)
+          .withBodyReadTimeout(1.second)
+          .withWriteTimeout(1.second)
           .withShutdownGrace(200.millis)
       } else if (profile == "nmap") {
-        HttpTimeouts.Default.withHead(15.seconds).withShutdownGrace(200.millis)
+        HttpTimeouts.Default.withRequestHeadTimeout(15.seconds).withShutdownGrace(200.millis)
       } else HttpTimeouts.Default.withShutdownGrace(200.millis))
     val server = Server.start(settings) { request =>
       if (proxy) {

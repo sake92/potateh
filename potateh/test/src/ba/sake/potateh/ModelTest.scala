@@ -7,15 +7,15 @@ class ModelTest extends munit.FunSuite {
   test("limits report individual invalid fields in updates") {
     val limits = HttpLimits.Default
     val cases = List[(name: String, minimum: Int, update: Int => HttpLimits)](
-      ("requestLineBytes", 1, limits.withRequestLineBytes),
-      ("headerLineBytes", 1, limits.withHeaderLineBytes),
-      ("headerSectionBytes", 2, limits.withHeaderSectionBytes),
-      ("headerCount", 0, limits.withHeaderCount),
-      ("chunkLineBytes", 1, limits.withChunkLineBytes),
-      ("chunkExtensionBytes", 0, limits.withChunkExtensionBytes),
-      ("trailerLineBytes", 1, limits.withTrailerLineBytes),
-      ("trailerSectionBytes", 2, limits.withTrailerSectionBytes),
-      ("trailerCount", 0, limits.withTrailerCount)
+      ("maxRequestLineBytes", 1, limits.withMaxRequestLineBytes),
+      ("maxHeaderLineBytes", 1, limits.withMaxHeaderLineBytes),
+      ("maxHeaderSectionBytes", 2, limits.withMaxHeaderSectionBytes),
+      ("maxHeaderCount", 0, limits.withMaxHeaderCount),
+      ("maxChunkLineBytes", 1, limits.withMaxChunkLineBytes),
+      ("maxChunkExtensionBytes", 0, limits.withMaxChunkExtensionBytes),
+      ("maxTrailerLineBytes", 1, limits.withMaxTrailerLineBytes),
+      ("maxTrailerSectionBytes", 2, limits.withMaxTrailerSectionBytes),
+      ("maxTrailerCount", 0, limits.withMaxTrailerCount)
     )
     cases.foreach { case (name, minimum, update) =>
       val invalid = minimum - 1
@@ -23,10 +23,10 @@ class ModelTest extends munit.FunSuite {
       interceptMessage[IllegalArgumentException](expected)(update(invalid))
       update(minimum)
     }
-    val expected = "requirement failed: bodyBytes must be nonnegative when defined (was Some(-1))"
-    interceptMessage[IllegalArgumentException](expected)(limits.withBodyBytes(Some(-1)))
-    assertEquals(HttpLimits.Default.withBodyBytes(Some(0)).bodyBytes, Some(0L))
-    assertEquals(limits.withBodyBytes(None).bodyBytes, None)
+    val expected = "requirement failed: maxBodyBytes must be nonnegative when defined (was Some(-1))"
+    interceptMessage[IllegalArgumentException](expected)(limits.withMaxBodyBytes(Some(-1)))
+    assertEquals(HttpLimits.Default.withMaxBodyBytes(Some(0)).maxBodyBytes, Some(0L))
+    assertEquals(limits.withMaxBodyBytes(None).maxBodyBytes, None)
   }
   test("response status is validated on creation and updates") {
     for (status <- List(Int.MinValue, 99, 600, Int.MaxValue)) {
@@ -42,10 +42,10 @@ class ModelTest extends munit.FunSuite {
   test("timeouts report individual invalid fields") {
     val timeouts = HttpTimeouts.Default
     val cases = List[(name: String, update: FiniteDuration => HttpTimeouts)](
-      ("idle", timeouts.withIdle),
-      ("head", timeouts.withHead),
-      ("bodyRead", timeouts.withBodyRead),
-      ("write", timeouts.withWrite)
+      ("idleTimeout", timeouts.withIdleTimeout),
+      ("requestHeadTimeout", timeouts.withRequestHeadTimeout),
+      ("bodyReadTimeout", timeouts.withBodyReadTimeout),
+      ("writeTimeout", timeouts.withWriteTimeout)
     )
     cases.foreach { case (name, update) =>
       for (invalid <- List(-1.nanosecond, Duration.Zero, Int.MaxValue.toLong.millis + 1.nanosecond)) {
@@ -78,10 +78,10 @@ class ModelTest extends munit.FunSuite {
   test("configuration rejects invalid bounds before binding") {
     intercept[IllegalArgumentException](ServerConfig.Default.withMaxConnections(0))
     for (backlog <- List(0, -1)) intercept[IllegalArgumentException](ServerConfig.Default.withBacklog(backlog))
-    intercept[IllegalArgumentException](HttpLimits.Default.withBodyBytes(Some(-1)))
-    intercept[IllegalArgumentException](HttpTimeouts.Default.withHead(Duration.Zero))
+    intercept[IllegalArgumentException](HttpLimits.Default.withMaxBodyBytes(Some(-1)))
+    intercept[IllegalArgumentException](HttpTimeouts.Default.withRequestHeadTimeout(Duration.Zero))
     intercept[IllegalArgumentException](
-      HttpTimeouts.Default.withHead(Int.MaxValue.toLong.millis + 1.nanosecond)
+      HttpTimeouts.Default.withRequestHeadTimeout(Int.MaxValue.toLong.millis + 1.nanosecond)
     )
     intercept[IllegalArgumentException](ResponseBody.Writer(Some(-1))(_ => ()))
   }
@@ -91,30 +91,30 @@ class ModelTest extends munit.FunSuite {
       .withBacklog(257)
       .withOnError(reporter)
       .withMaxConnections(17)
-      .withLimits(HttpLimits.Default.withHeaderCount(23))
-      .withTimeouts(HttpTimeouts.Default.withHead(7.seconds))
+      .withLimits(HttpLimits.Default.withMaxHeaderCount(23))
+      .withTimeouts(HttpTimeouts.Default.withRequestHeadTimeout(7.seconds))
     val changed = original
       .withMaxConnections(19)
-      .withLimits(original.limits.withBodyBytes(None))
-      .withTimeouts(original.timeouts.withWrite(11.seconds))
+      .withLimits(original.limits.withMaxBodyBytes(None))
+      .withTimeouts(original.timeouts.withWriteTimeout(11.seconds))
     assertEquals(changed.maxConnections, 19)
     assertEquals(changed.backlog, 257)
     assert(changed.onError eq reporter)
     assertEquals(ServerConfig.Default.backlog, 128)
     assertEquals(changed.bindAddress, original.bindAddress)
-    assertEquals(changed.limits.headerCount, 23)
-    assertEquals(changed.limits.bodyBytes, None)
-    assertEquals(changed.timeouts.head, 7.seconds)
-    assertEquals(changed.timeouts.write, 11.seconds)
+    assertEquals(changed.limits.maxHeaderCount, 23)
+    assertEquals(changed.limits.maxBodyBytes, None)
+    assertEquals(changed.timeouts.requestHeadTimeout, 7.seconds)
+    assertEquals(changed.timeouts.writeTimeout, 11.seconds)
     assertEquals(ServerConfig.Default.maxConnections, 128)
-    assertEquals(HttpLimits.Default.headerCount, 100)
-    assertEquals(HttpTimeouts.Default.head, 10.seconds)
+    assertEquals(HttpLimits.Default.maxHeaderCount, 100)
+    assertEquals(HttpTimeouts.Default.requestHeadTimeout, 10.seconds)
     assertEquals(original.maxConnections, 17)
-    assertEquals(original.limits.bodyBytes, Some(8L * 1024 * 1024))
-    assertEquals(original.timeouts.write, 30.seconds)
+    assertEquals(original.limits.maxBodyBytes, Some(8L * 1024 * 1024))
+    assertEquals(original.timeouts.writeTimeout, 30.seconds)
     intercept[IllegalArgumentException](original.withMaxConnections(0))
-    intercept[IllegalArgumentException](original.limits.withBodyBytes(Some(-1)))
-    intercept[IllegalArgumentException](original.timeouts.withHead(Duration.Zero))
+    intercept[IllegalArgumentException](original.limits.withMaxBodyBytes(Some(-1)))
+    intercept[IllegalArgumentException](original.timeouts.withRequestHeadTimeout(Duration.Zero))
   }
   test("response updates retain the writer and leave the original unchanged") {
     val output = new java.io.ByteArrayOutputStream()

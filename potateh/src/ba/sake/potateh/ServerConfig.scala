@@ -4,109 +4,174 @@ import java.net.InetSocketAddress
 import scala.concurrent.duration.*
 
 final class HttpLimits private (
-    val requestLineBytes: Int,
-    val headerLineBytes: Int,
-    val headerSectionBytes: Int,
-    val headerCount: Int,
-    val chunkLineBytes: Int,
-    val chunkExtensionBytes: Int,
-    val trailerLineBytes: Int,
-    val trailerSectionBytes: Int,
-    val trailerCount: Int,
-    val bodyBytes: Option[Long]
+    val maxRequestLineBytes: Int,
+    val maxHeaderLineBytes: Int,
+    val maxHeaderSectionBytes: Int,
+    val maxHeaderCount: Int,
+    val maxChunkLineBytes: Int,
+    val maxChunkExtensionBytes: Int,
+    val maxTrailerLineBytes: Int,
+    val maxTrailerSectionBytes: Int,
+    val maxTrailerCount: Int,
+    val maxBodyBytes: Option[Long]
 ) {
-  require(requestLineBytes > 0, s"requestLineBytes must be at least 1 (was $requestLineBytes)")
-  require(headerLineBytes > 0, s"headerLineBytes must be at least 1 (was $headerLineBytes)")
-  require(headerSectionBytes >= 2, s"headerSectionBytes must be at least 2 (was $headerSectionBytes)")
-  require(headerCount >= 0, s"headerCount must be at least 0 (was $headerCount)")
-  require(chunkLineBytes > 0, s"chunkLineBytes must be at least 1 (was $chunkLineBytes)")
-  require(chunkExtensionBytes >= 0, s"chunkExtensionBytes must be at least 0 (was $chunkExtensionBytes)")
-  require(trailerLineBytes > 0, s"trailerLineBytes must be at least 1 (was $trailerLineBytes)")
-  require(trailerSectionBytes >= 2, s"trailerSectionBytes must be at least 2 (was $trailerSectionBytes)")
-  require(trailerCount >= 0, s"trailerCount must be at least 0 (was $trailerCount)")
-  require(bodyBytes.forall(_ >= 0), s"bodyBytes must be nonnegative when defined (was $bodyBytes)")
+  require(maxRequestLineBytes > 0, s"maxRequestLineBytes must be at least 1 (was $maxRequestLineBytes)")
+  require(maxHeaderLineBytes > 0, s"maxHeaderLineBytes must be at least 1 (was $maxHeaderLineBytes)")
+  require(maxHeaderSectionBytes >= 2, s"maxHeaderSectionBytes must be at least 2 (was $maxHeaderSectionBytes)")
+  require(maxHeaderCount >= 0, s"maxHeaderCount must be at least 0 (was $maxHeaderCount)")
+  require(maxChunkLineBytes > 0, s"maxChunkLineBytes must be at least 1 (was $maxChunkLineBytes)")
+  require(maxChunkExtensionBytes >= 0, s"maxChunkExtensionBytes must be at least 0 (was $maxChunkExtensionBytes)")
+  require(maxTrailerLineBytes > 0, s"maxTrailerLineBytes must be at least 1 (was $maxTrailerLineBytes)")
+  require(maxTrailerSectionBytes >= 2, s"maxTrailerSectionBytes must be at least 2 (was $maxTrailerSectionBytes)")
+  require(maxTrailerCount >= 0, s"maxTrailerCount must be at least 0 (was $maxTrailerCount)")
+  require(maxBodyBytes.forall(_ >= 0), s"maxBodyBytes must be nonnegative when defined (was $maxBodyBytes)")
 
-  def withRequestLineBytes(value: Int): HttpLimits = {
-    copy(requestLineBytes = value)
+  def withMaxRequestLineBytes(value: Int): HttpLimits = {
+    copy(maxRequestLineBytes = value)
   }
-  def withHeaderLineBytes(value: Int): HttpLimits = {
-    copy(headerLineBytes = value)
+  def withMaxHeaderLineBytes(value: Int): HttpLimits = {
+    copy(maxHeaderLineBytes = value)
   }
-  def withHeaderSectionBytes(value: Int): HttpLimits = {
-    copy(headerSectionBytes = value)
+  def withMaxHeaderSectionBytes(value: Int): HttpLimits = {
+    copy(maxHeaderSectionBytes = value)
   }
-  def withHeaderCount(value: Int): HttpLimits = {
-    copy(headerCount = value)
+  def withMaxHeaderCount(value: Int): HttpLimits = {
+    copy(maxHeaderCount = value)
   }
-  def withChunkLineBytes(value: Int): HttpLimits = {
-    copy(chunkLineBytes = value)
+  def withMaxChunkLineBytes(value: Int): HttpLimits = {
+    copy(maxChunkLineBytes = value)
   }
-  def withChunkExtensionBytes(value: Int): HttpLimits = {
-    copy(chunkExtensionBytes = value)
+  def withMaxChunkExtensionBytes(value: Int): HttpLimits = {
+    copy(maxChunkExtensionBytes = value)
   }
-  def withTrailerLineBytes(value: Int): HttpLimits = {
-    copy(trailerLineBytes = value)
+  def withMaxTrailerLineBytes(value: Int): HttpLimits = {
+    copy(maxTrailerLineBytes = value)
   }
-  def withTrailerSectionBytes(value: Int): HttpLimits = {
-    copy(trailerSectionBytes = value)
+  def withMaxTrailerSectionBytes(value: Int): HttpLimits = {
+    copy(maxTrailerSectionBytes = value)
   }
-  def withTrailerCount(value: Int): HttpLimits = {
-    copy(trailerCount = value)
+  def withMaxTrailerCount(value: Int): HttpLimits = {
+    copy(maxTrailerCount = value)
   }
-  def withBodyBytes(value: Option[Long]): HttpLimits = {
-    copy(bodyBytes = value)
+  def withMaxBodyBytes(value: Option[Long]): HttpLimits = {
+    copy(maxBodyBytes = value)
   }
+
+  @deprecated("Use maxRequestLineBytes instead.", "next")
+  def requestLineBytes: Int = maxRequestLineBytes
+
+  @deprecated("Use withMaxRequestLineBytes instead.", "next")
+  def withRequestLineBytes(value: Int): HttpLimits = withMaxRequestLineBytes(value)
+
+  @deprecated("Use maxHeaderLineBytes instead.", "next")
+  def headerLineBytes: Int = maxHeaderLineBytes
+
+  @deprecated("Use withMaxHeaderLineBytes instead.", "next")
+  def withHeaderLineBytes(value: Int): HttpLimits = withMaxHeaderLineBytes(value)
+
+  @deprecated("Use maxHeaderSectionBytes instead.", "next")
+  def headerSectionBytes: Int = maxHeaderSectionBytes
+
+  @deprecated("Use withMaxHeaderSectionBytes instead.", "next")
+  def withHeaderSectionBytes(value: Int): HttpLimits = withMaxHeaderSectionBytes(value)
+
+  @deprecated("Use maxHeaderCount instead.", "next")
+  def headerCount: Int = maxHeaderCount
+
+  @deprecated("Use withMaxHeaderCount instead.", "next")
+  def withHeaderCount(value: Int): HttpLimits = withMaxHeaderCount(value)
+
+  @deprecated("Use maxChunkLineBytes instead.", "next")
+  def chunkLineBytes: Int = maxChunkLineBytes
+
+  @deprecated("Use withMaxChunkLineBytes instead.", "next")
+  def withChunkLineBytes(value: Int): HttpLimits = withMaxChunkLineBytes(value)
+
+  @deprecated("Use maxChunkExtensionBytes instead.", "next")
+  def chunkExtensionBytes: Int = maxChunkExtensionBytes
+
+  @deprecated("Use withMaxChunkExtensionBytes instead.", "next")
+  def withChunkExtensionBytes(value: Int): HttpLimits = withMaxChunkExtensionBytes(value)
+
+  @deprecated("Use maxTrailerLineBytes instead.", "next")
+  def trailerLineBytes: Int = maxTrailerLineBytes
+
+  @deprecated("Use withMaxTrailerLineBytes instead.", "next")
+  def withTrailerLineBytes(value: Int): HttpLimits = withMaxTrailerLineBytes(value)
+
+  @deprecated("Use maxTrailerSectionBytes instead.", "next")
+  def trailerSectionBytes: Int = maxTrailerSectionBytes
+
+  @deprecated("Use withMaxTrailerSectionBytes instead.", "next")
+  def withTrailerSectionBytes(value: Int): HttpLimits = withMaxTrailerSectionBytes(value)
+
+  @deprecated("Use maxTrailerCount instead.", "next")
+  def trailerCount: Int = maxTrailerCount
+
+  @deprecated("Use withMaxTrailerCount instead.", "next")
+  def withTrailerCount(value: Int): HttpLimits = withMaxTrailerCount(value)
+
+  @deprecated("Use maxBodyBytes instead.", "next")
+  def bodyBytes: Option[Long] = maxBodyBytes
+
+  @deprecated("Use withMaxBodyBytes instead.", "next")
+  def withBodyBytes(value: Option[Long]): HttpLimits = withMaxBodyBytes(value)
 
   private def copy(
-      requestLineBytes: Int = this.requestLineBytes,
-      headerLineBytes: Int = this.headerLineBytes,
-      headerSectionBytes: Int = this.headerSectionBytes,
-      headerCount: Int = this.headerCount,
-      chunkLineBytes: Int = this.chunkLineBytes,
-      chunkExtensionBytes: Int = this.chunkExtensionBytes,
-      trailerLineBytes: Int = this.trailerLineBytes,
-      trailerSectionBytes: Int = this.trailerSectionBytes,
-      trailerCount: Int = this.trailerCount,
-      bodyBytes: Option[Long] = this.bodyBytes
+      maxRequestLineBytes: Int = this.maxRequestLineBytes,
+      maxHeaderLineBytes: Int = this.maxHeaderLineBytes,
+      maxHeaderSectionBytes: Int = this.maxHeaderSectionBytes,
+      maxHeaderCount: Int = this.maxHeaderCount,
+      maxChunkLineBytes: Int = this.maxChunkLineBytes,
+      maxChunkExtensionBytes: Int = this.maxChunkExtensionBytes,
+      maxTrailerLineBytes: Int = this.maxTrailerLineBytes,
+      maxTrailerSectionBytes: Int = this.maxTrailerSectionBytes,
+      maxTrailerCount: Int = this.maxTrailerCount,
+      maxBodyBytes: Option[Long] = this.maxBodyBytes
   ): HttpLimits = {
     new HttpLimits(
-      requestLineBytes,
-      headerLineBytes,
-      headerSectionBytes,
-      headerCount,
-      chunkLineBytes,
-      chunkExtensionBytes,
-      trailerLineBytes,
-      trailerSectionBytes,
-      trailerCount,
-      bodyBytes
+      maxRequestLineBytes,
+      maxHeaderLineBytes,
+      maxHeaderSectionBytes,
+      maxHeaderCount,
+      maxChunkLineBytes,
+      maxChunkExtensionBytes,
+      maxTrailerLineBytes,
+      maxTrailerSectionBytes,
+      maxTrailerCount,
+      maxBodyBytes
     )
   }
 }
 
 object HttpLimits {
   val Default: HttpLimits = new HttpLimits(
-    requestLineBytes = 8192,
-    headerLineBytes = 8192,
-    headerSectionBytes = 32768,
-    headerCount = 100,
-    chunkLineBytes = 8192,
-    chunkExtensionBytes = 32768,
-    trailerLineBytes = 8192,
-    trailerSectionBytes = 16384,
-    trailerCount = 50,
-    bodyBytes = Some(8L * 1024 * 1024)
+    maxRequestLineBytes = 8192,
+    maxHeaderLineBytes = 8192,
+    maxHeaderSectionBytes = 32768,
+    maxHeaderCount = 100,
+    maxChunkLineBytes = 8192,
+    maxChunkExtensionBytes = 32768,
+    maxTrailerLineBytes = 8192,
+    maxTrailerSectionBytes = 16384,
+    maxTrailerCount = 50,
+    maxBodyBytes = Some(8L * 1024 * 1024)
   )
 }
 
 final class HttpTimeouts private (
-    val idle: FiniteDuration,
-    val head: FiniteDuration,
-    val bodyRead: FiniteDuration,
-    val write: FiniteDuration,
+    val idleTimeout: FiniteDuration,
+    val requestHeadTimeout: FiniteDuration,
+    val bodyReadTimeout: FiniteDuration,
+    val writeTimeout: FiniteDuration,
     val shutdownGrace: FiniteDuration
 ) {
-  List("idle" -> idle, "head" -> head, "bodyRead" -> bodyRead, "write" -> write)
+  List(
+    "idleTimeout" -> idleTimeout,
+    "requestHeadTimeout" -> requestHeadTimeout,
+    "bodyReadTimeout" -> bodyReadTimeout,
+    "writeTimeout" -> writeTimeout
+  )
     .foreach { case (name, value) =>
       require(
         value.toNanos > 0 && value.toNanos <= Int.MaxValue.toLong * 1000000L,
@@ -118,34 +183,58 @@ final class HttpTimeouts private (
     s"shutdownGrace must be between zero and one day (was $shutdownGrace)"
   )
 
-  def withIdle(value: FiniteDuration): HttpTimeouts = {
-    copy(idle = value)
+  def withIdleTimeout(value: FiniteDuration): HttpTimeouts = {
+    copy(idleTimeout = value)
   }
-  def withHead(value: FiniteDuration): HttpTimeouts = {
-    copy(head = value)
+  def withRequestHeadTimeout(value: FiniteDuration): HttpTimeouts = {
+    copy(requestHeadTimeout = value)
   }
-  def withBodyRead(value: FiniteDuration): HttpTimeouts = {
-    copy(bodyRead = value)
+  def withBodyReadTimeout(value: FiniteDuration): HttpTimeouts = {
+    copy(bodyReadTimeout = value)
   }
-  def withWrite(value: FiniteDuration): HttpTimeouts = {
-    copy(write = value)
+  def withWriteTimeout(value: FiniteDuration): HttpTimeouts = {
+    copy(writeTimeout = value)
   }
   def withShutdownGrace(value: FiniteDuration): HttpTimeouts = {
     copy(shutdownGrace = value)
   }
 
+  @deprecated("Use idleTimeout instead.", "next")
+  def idle: FiniteDuration = idleTimeout
+
+  @deprecated("Use withIdleTimeout instead.", "next")
+  def withIdle(value: FiniteDuration): HttpTimeouts = withIdleTimeout(value)
+
+  @deprecated("Use requestHeadTimeout instead.", "next")
+  def head: FiniteDuration = requestHeadTimeout
+
+  @deprecated("Use withRequestHeadTimeout instead.", "next")
+  def withHead(value: FiniteDuration): HttpTimeouts = withRequestHeadTimeout(value)
+
+  @deprecated("Use bodyReadTimeout instead.", "next")
+  def bodyRead: FiniteDuration = bodyReadTimeout
+
+  @deprecated("Use withBodyReadTimeout instead.", "next")
+  def withBodyRead(value: FiniteDuration): HttpTimeouts = withBodyReadTimeout(value)
+
+  @deprecated("Use writeTimeout instead.", "next")
+  def write: FiniteDuration = writeTimeout
+
+  @deprecated("Use withWriteTimeout instead.", "next")
+  def withWrite(value: FiniteDuration): HttpTimeouts = withWriteTimeout(value)
+
   private def copy(
-      idle: FiniteDuration = this.idle,
-      head: FiniteDuration = this.head,
-      bodyRead: FiniteDuration = this.bodyRead,
-      write: FiniteDuration = this.write,
+      idleTimeout: FiniteDuration = this.idleTimeout,
+      requestHeadTimeout: FiniteDuration = this.requestHeadTimeout,
+      bodyReadTimeout: FiniteDuration = this.bodyReadTimeout,
+      writeTimeout: FiniteDuration = this.writeTimeout,
       shutdownGrace: FiniteDuration = this.shutdownGrace
   ): HttpTimeouts = {
     new HttpTimeouts(
-      idle,
-      head,
-      bodyRead,
-      write,
+      idleTimeout,
+      requestHeadTimeout,
+      bodyReadTimeout,
+      writeTimeout,
       shutdownGrace
     )
   }
@@ -153,10 +242,10 @@ final class HttpTimeouts private (
 
 object HttpTimeouts {
   val Default: HttpTimeouts = new HttpTimeouts(
-    idle = 15.seconds,
-    head = 10.seconds,
-    bodyRead = 30.seconds,
-    write = 30.seconds,
+    idleTimeout = 15.seconds,
+    requestHeadTimeout = 10.seconds,
+    bodyReadTimeout = 30.seconds,
+    writeTimeout = 30.seconds,
     shutdownGrace = 5.seconds
   )
 }
