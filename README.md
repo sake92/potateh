@@ -20,12 +20,9 @@ println(server.address) // defaults to 127.0.0.1:8080
 ```
 
 Pass a `ServerConfig` to customize the bind address, limits and timeouts.
-Requests, responses, headers, writers and configuration use final classes with
-private constructors. Start configuration from `ServerConfig.Default`, `HttpLimits.Default` or
-`HttpTimeouts.Default`; use named-argument factories for the other types. Use `withX` methods for immutable
-updates, for example `ServerConfig.Default.withMaxConnections(256)` or
-`response.withStatus(201)`. These types have no case-class `copy`, extractors or
-`Product` API. Except for `Headers`, they use reference equality.
+Start from `ServerConfig.Default`, `HttpLimits.Default` or `HttpTimeouts.Default`
+and use `withX` methods for immutable updates, for example
+`ServerConfig.Default.withMaxConnections(256)` or `response.withStatus(201)`.
 
 Callbacks may run concurrently across connections. Body streams belong to their
 exchange; use them only in the callback or synchronous response writer.
@@ -37,6 +34,8 @@ count toward the connection limit. The caller owns the supplied executor.
 
 Routing, authentication, TLS, HTTP/2 and WebSockets belong outside this core.
 
+For now, build from source; release dependency coordinates are not documented yet.
+
 Build and test with Java 21 and Deder 0.22.2; Native builds also need clang
 (Scala Native 0.5.12).
 
@@ -45,5 +44,5 @@ deder exec -t compile
 deder exec -t test
 ```
 
-See [architecture](ARCHITECTURE.md), [protocol coverage](COMPATIBILITY.md),
-[conformance checks](conformance/README.md) and [planned improvements](TODO.md).
+See [architecture](ARCHITECTURE.md), [conformance checks](conformance/README.md)
+and [planned improvements](TODO.md).

@@ -16,9 +16,7 @@ scala --power package conformance/run.scala --server=false --assembly \
 
 Do not replace a runner JAR while a run using it is active. For another build,
 use a different filename. Native uses release-fast mode with multithreading.
-The CLI uses [mainargs](https://github.com/com-lihaoyi/mainargs) for typed options,
-ujson for raw report inspection and Ant Commandline for quoted command splitting;
-all three are pinned in `run.scala`. `--server` is split without a shell.
+`--server` is split into arguments without a shell.
 
 Prepare the pinned suites:
 
@@ -262,8 +260,8 @@ An empty Host remains accepted. The probe's `COMP-HOST-EMPTY-VALUE` expects
 rejection, but [RFC 9112 section 3.2](https://www.rfc-editor.org/rfc/rfc9112.html#section-3.2)
 requires an empty Host when the target authority is missing or undefined, and
 requires rejection of missing, repeated or invalid Host fields. We interpret
-this as permitting the empty value rather than requiring blanket rejection. This disagreement remains visible as a failed
-probe and a nonzero runner exit, without changing suite expectations.
+this as permitting the empty value rather than requiring blanket rejection.
+The disagreement remains a failed probe and a nonzero runner exit.
 
 Local results are recorded below. Remote CI and other operating systems require
 separate verification. These are bounded local diagnostics, not production
@@ -271,8 +269,7 @@ capacity, performance, or complete RFC-conformance proof.
 
 The idle-drip check accepts either EOF/reset or a fully validated bodyless 408
 followed by EOF. It records the 408 wire response; any premature success or
-other response fails. This adapts the source runner's close-only assumption to
-potateh's explicit request-head timeout response.
+other response fails.
 
 # Local baseline (2026-11-07)
 
@@ -292,64 +289,21 @@ Native 0.5.12 release-fast with multithreading:
 | Nmap `http-slowloris-check` (10-/15-second head deadlines) | 2 explicit negatives | 2 explicit negatives |
 | Proxy boundaries (13 cases × direct/Caddy/nginx buffered/nginx streaming) | 52/52 | 52/52 |
 
-The proxy baseline used local changes based on `c2cd69f`, with the image digests
-and configurations in `proxy/`. Both targets produced the same outcomes:
-Caddy forwarded CL+TE and equal duplicate lengths with the exact decoded body;
-nginx rejected them. Both proxies normalized bare LF; Caddy also normalized the
-folded-field case. Direct potateh rejected these inputs. Invalid chunks produced
-400 directly/through nginx and 502 through Caddy; Caddy and staged nginx streaming
-could enter the backend handler before rejecting the incomplete body. No decoy
-became a request, all follow-up markers/recovery responses matched, and proxy
-backend reuse was verified. Normal shutdown completed for every fixture.
-An injected proxy method rewrite failed the exact-response assertion and exited
-nonzero; a TERM check removed the owned containers and stopped the active fixture.
-Reports are under ignored `conformance/out/proxy-{jvm,native}-verified`.
+These results were collected during development, before subsequent source
+changes; they are not a verification of every later revision. Http11Probe
+executed 196 tests per target, excluding 17 cookie/WebSocket cases. Its one
+failure is the empty-Host disagreement described above.
 
-Nmap 7.94SVN reported `NOT VULNERABLE` for both head deadlines on both targets;
-its debug timing differences rounded to zero. A temporary control server that
-deliberately extends its timeout reported `LIKELY VULNERABLE` with an 18-second
-difference. Ordinary HTTP worked before/after each scan and every fixture
-completed file-triggered shutdown. Raw XML/logs, commands, binary version and
-NSE script SHA-256 are under ignored `conformance/out/nmap-evaluation`. These
-heuristic results complement the measured admission/recovery checks below.
+## Known limitations
 
-The sustained baseline used local changes based on `f0fc4a7`. All legitimate
-roles progressed throughout the spare-capacity runs without transport failures.
-The two-connection runs measured admission/transport failures under pressure;
-both targets recovered ordinary requests within 8 ms after clients stopped,
-then passed all slow/streaming recovery checks and completed fixture shutdown.
-This one-minute workload per mode does not establish production capacity or
-long-term resource stability. Raw reports are under ignored
-`conformance/out/sustained-{jvm,native}-final`.
-
-The fuzzing baseline used local changes based on `bfbc050`, with 1000 cases per
-seed and recovery after every case. Both fixtures completed file-triggered
-shutdown. A deliberately faulty temporary fixture verified nonzero failure
-reporting and replay; no server defect was found by these bounded campaigns.
-
-Http11Probe executed 196 distinct tests per target, excluding 17 cookie/WebSocket
-cases. Its one failure is the empty-Host disagreement above; both runner exits
-remain 1. The original scored/unscored verdicts and warnings remain untouched.
-
-Raw local artifacts are ignored under `conformance/out`: `jvm-h1spec-ready`,
-`native-h1spec-ready`, `jvm-probe-ready`, `native-probe-ready`, `jvm-slowtool-ready`,
-`native-slowtool-ready`, and the final slowclients runs `jvm-slow-ready` and
-`native-slow-ready`. Earlier harness-development runs are diagnostics only. The
-final runner checks the new fixture's completed-stop marker and allows only a
-validated 408 plus EOF as an early idle-drip deadline rejection.
-
-Native TERM cleanup of the parked long-running fixture emitted an
-`IllegalMonitorStateException` in Scala Native 0.5.12 `Runtime.runHooksConcurrent`
-and `Thread.join`, after the server printed its completed-stop marker. This is
-an outstanding portability limitation; successful HTTP verdicts do not establish
-clean signal shutdown. Explicit `Server.stop()`, the release smoke, and
-file-triggered slow-client fixture shutdown are checked separately. No release
-readiness or remote CI claim follows from these local results.
-
-The same exception reproduced in three of three TERM trials without potateh:
-a standalone Scala 3.9.0 / Native 0.5.12 multithreaded program containing only
-`Runtime.addShutdownHook(new Thread(() => println("HOOK FINISHED")))` and
-`new java.util.concurrent.CountDownLatch(1).await()`. Each hook finished before
-the runtime exception and process exit 1. This isolates the parked-main TERM
-failure from the HTTP server. It remains a Native runtime limitation rather
-than a passing shutdown result for that fixture profile.
+- Validation covers Java 21 on Linux and Linux x86_64 Scala Native. macOS and
+  Windows remain unverified.
+- Scala Native 0.5.12 TERM shutdown of the fixture with its main thread parked
+  emitted `IllegalMonitorStateException` in runtime hook joining after
+  `Server.stop()` completed. The exception also reproduced without potateh in
+  a shutdown-hook plus `CountDownLatch` program. Explicit stop, release smoke
+  and file-triggered fixture shutdown pass; clean signal shutdown is unverified.
+- Scala Native 0.5.12 can report `Connection refused` from timed `Socket.connect`
+  when the peer accepts and immediately closes. Admission tests accept this
+  only for deliberately rejected excess connections; queued-connection and
+  fresh-request checks still require a working server.

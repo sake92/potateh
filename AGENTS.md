@@ -18,5 +18,4 @@
 
 - Setup and public API: `README.md`.
 - Implementation boundaries: `ARCHITECTURE.md`.
-- Protocol coverage: `COMPATIBILITY.md`.
 - External checks and fixtures: `conformance/README.md`.

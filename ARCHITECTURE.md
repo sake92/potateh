@@ -62,13 +62,16 @@ TLS and application formats belong outside this core.
 
 ## Public API evolution
 
+Requests, responses, headers, writers and configuration use final classes with
+private constructors and immutable update methods. They have no case-class
+`copy`, extractors or `Product` API. Except for `Headers`, they use reference
+equality.
+
 For library changes, keep existing public factory and method signatures, including
 parameter names and defaults. Add new settings through `withX` methods; adding a
 defaulted parameter to an existing factory still changes its binary signature.
-This API replaces the initial snapshot's case classes and requires consumers to
-recompile. It prepares for compatible evolution; release-to-release binary
-compatibility has not yet been checked against a published baseline. Native
-applications must be relinked when upgrading.
+Release-to-release binary compatibility has not yet been checked against a
+published baseline. Native applications must be relinked when upgrading.
 
 The design follows the [binary compatibility guide](https://github.com/jatcwang/binary-compatibility-guide):
 private constructors and individual update methods reduce the public signatures
