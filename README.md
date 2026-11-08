@@ -7,6 +7,12 @@ Blocking HTTP/1.0 and HTTP/1.1 server core for Scala 3 on JVM and Scala Native.
 - Bounded connections, configurable size limits and I/O timeouts.
 - Persistent connections, ordered pipelining and graceful shutdown.
 
+For Scala Native or JVM with sbt 2, add the dependency in `build.sbt`:
+
+```scala
+libraryDependencies += "ba.sake" %% "potateh" % "0.1.0"
+```
+
 ```scala
 import ba.sake.potateh.*
 import java.nio.charset.StandardCharsets.UTF_8
@@ -33,8 +39,6 @@ virtual-thread executor. Each task serves a whole connection; queued connections
 count toward the connection limit. The caller owns the supplied executor.
 
 Routing, authentication, TLS, HTTP/2 and WebSockets belong outside this core.
-
-For now, build from source; release dependency coordinates are not documented yet.
 
 Build and test with Java 21 and Deder 0.22.2; Native builds also need clang
 (Scala Native 0.5.12).
