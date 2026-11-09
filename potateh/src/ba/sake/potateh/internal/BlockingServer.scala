@@ -1,13 +1,13 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
-import ba.sake.potateh.*
-import java.io.{BufferedInputStream, BufferedOutputStream, IOException, InputStream, PushbackInputStream}
-import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
-import scala.collection.mutable
-import scala.util.control.NonFatal
 import java.util.concurrent.{Executor, Executors, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
+import java.io.{BufferedInputStream, BufferedOutputStream, IOException, InputStream, PushbackInputStream}
+import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
+import scala.util.boundary, boundary.break
+import scala.collection.mutable
+import scala.util.control.NonFatal
+import ba.sake.potateh.*
 
 /** One executor task per admitted connection, including queued connections. */
 private[potateh] final class BlockingServer(
@@ -51,14 +51,17 @@ private[potateh] final class BlockingServer(
   private var state = State.Running
   private var stopOwner: Option[Thread] = None
   private val connections = mutable.Set.empty[Connection]
+
   private val (executor, ownedExecutor) = suppliedExecutor match {
     case Some(value) => (executor = value, ownedExecutor = None)
     case None        =>
       val pool = Executors.newCachedThreadPool(task => new Thread(task, "potateh-connection"))
       (executor = pool: Executor, ownedExecutor = Some(pool))
   }
+
   private val writes = new WriteTimeouts(config.timeouts.writeTimeout.toNanos)
   private val acceptThread = new Thread(() => accept(), "potateh-accept")
+
   val address: InetSocketAddress = {
     listener.getLocalSocketAddress().asInstanceOf[InetSocketAddress]
   }
@@ -155,6 +158,7 @@ private[potateh] final class BlockingServer(
     }
   }
 
+  // TODO withLock
   private inline def withLifecycle[A](inline operation: A): A = {
     lifecycle.lock()
     try operation
@@ -162,6 +166,7 @@ private[potateh] final class BlockingServer(
   }
 
   private def running: Boolean = withLifecycle(state == State.Running)
+
   private def accept(): Unit = {
     try {
       while (running) {
@@ -309,11 +314,14 @@ private[potateh] final class BlockingServer(
       output.flush()
     } finally close(socket)
   }
+
   private def closeListener(): Unit = try listener.close()
   catch { case _: IOException => () }
+
   private def close(socket: Socket): Unit = try socket.close()
   catch { case _: IOException => () }
-  private def millis(nanos: Long): Long = {
+
+  private def millis(nanos: Long): Long =
     math.max(1L, (nanos + 999999L) / 1000000L)
-  }
+  
 }
