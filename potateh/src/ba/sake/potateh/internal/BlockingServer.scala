@@ -1,12 +1,15 @@
 package ba.sake.potateh.internal
 
-import java.util.concurrent.{Executor, Executors, RejectedExecutionException, TimeUnit}
-import java.util.concurrent.locks.ReentrantLock
 import java.io.{BufferedInputStream, BufferedOutputStream, IOException, InputStream, PushbackInputStream}
 import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
-import scala.util.boundary, boundary.break
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{Executor, Executors, RejectedExecutionException, TimeUnit}
+
 import scala.collection.mutable
+import scala.util.boundary
 import scala.util.control.NonFatal
+
+import boundary.break
 import ba.sake.potateh.*
 
 /** One executor task per admitted connection, including queued connections. */
@@ -42,6 +45,7 @@ private[potateh] final class BlockingServer(
         }
       }
     }
+
   }
 
   private enum State { case Running, Stopping, Stopped }
@@ -321,7 +325,8 @@ private[potateh] final class BlockingServer(
   private def close(socket: Socket): Unit = try socket.close()
   catch { case _: IOException => () }
 
-  private def millis(nanos: Long): Long =
+  private def millis(nanos: Long): Long = {
     math.max(1L, (nanos + 999999L) / 1000000L)
-  
+  }
+
 }

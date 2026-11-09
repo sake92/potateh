@@ -1,6 +1,7 @@
 package ba.sake.potateh
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.duration.*
 
 class ModelTest extends munit.FunSuite {

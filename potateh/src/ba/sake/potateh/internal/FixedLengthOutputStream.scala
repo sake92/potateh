@@ -1,7 +1,10 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
 import java.io.{IOException, OutputStream}
+
+import scala.util.boundary
+
+import boundary.break
 
 /** Writes an exact response body to a caller-owned connection stream. Length zero also serves as strict no-body output:
   * nonempty writes fail, and close emits no payload or framing bytes. Successful close flushes the sink without closing
@@ -67,4 +70,5 @@ private[potateh] final class FixedLengthOutputStream(
     failure = Some(error)
     throw error
   }
+
 }

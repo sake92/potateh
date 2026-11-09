@@ -1,9 +1,11 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
 import java.io.{IOException, InputStream}
 import java.net.{URI, URISyntaxException}
 
+import scala.util.boundary
+
+import boundary.break
 import HttpSyntax.{isToken, trimOws}
 
 /** Strict HTTP/1.x head parsing. The caller owns and reuses the input stream. After a parse failure the connection must
@@ -231,4 +233,5 @@ private[potateh] object RequestHeadParser {
   private def fail(code: Int, message: String): Nothing = {
     throw new ParseException(code, message)
   }
+
 }

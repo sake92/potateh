@@ -1,4 +1,3 @@
-import scala.util.boundary, boundary.break
 import java.io.{ByteArrayOutputStream, EOFException, IOException}
 import java.net.{InetSocketAddress, SocketException}
 import java.nio.ByteBuffer
@@ -6,9 +5,13 @@ import java.nio.channels.{SelectionKey, Selector, SocketChannel}
 import java.nio.charset.StandardCharsets.ISO_8859_1
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
+
 import scala.collection.mutable
 import scala.util.Random
+import scala.util.boundary
 import scala.util.control.NonFatal
+
+import boundary.break
 
 /** Seeded grammar mutations and connection sequences; no external suite or library dependency. */
 object Fuzzing {
@@ -485,4 +488,5 @@ object Fuzzing {
       channel.configureBlocking(true)
     }
   }
+
 }

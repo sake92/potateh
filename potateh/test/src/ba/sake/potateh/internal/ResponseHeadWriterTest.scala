@@ -1,15 +1,18 @@
 package ba.sake.potateh.internal
 
-import ba.sake.potateh.*
 import java.io.{ByteArrayOutputStream, IOException, OutputStream}
 import java.nio.charset.StandardCharsets.ISO_8859_1
+
+import ba.sake.potateh.*
 import ResponseHeadWriter.*
 import ResponseHeadWriter.Framing.*
 
 /** Adapted from upstream ResponseHeadWriterTest for engine-owned framing. */
 class ResponseHeadWriterTest extends munit.FunSuite {
   private val date = "Thu, 01 Jan 1970 00:00:00 GMT"
+
   private def text(bytes: Array[Byte]): String = new String(bytes, ISO_8859_1)
+
   private def prepared(
       body: ResponseBody,
       method: String = "GET",

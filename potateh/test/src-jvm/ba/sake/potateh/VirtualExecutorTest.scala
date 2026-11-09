@@ -2,8 +2,8 @@ package ba.sake.potateh
 
 import java.net.{InetSocketAddress, Socket}
 import java.nio.charset.StandardCharsets.US_ASCII
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 class VirtualExecutorTest extends munit.FunSuite {
   test("JVM virtual executor serves connections and remains caller-owned") {

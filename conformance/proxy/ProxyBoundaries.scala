@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets.{ISO_8859_1, UTF_8}
 import java.nio.file.{Files, Path}
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+
 import scala.util.control.NonFatal
 
 /** Raw HTTP/1.1 through real proxies; backend handler observations are the oracle. */
@@ -204,14 +205,18 @@ object ProxyBoundaries {
   }
 
   private def hex(bytes: Array[Byte]): String = bytes.map(b => f"${b & 0xff}%02x").mkString
+
   private def encoded(text: String): String = hex(text.getBytes(ISO_8859_1))
+
   private def decoded(text: String): String = {
     new String(text.grouped(2).map(Integer.parseInt(_, 16).toByte).toArray, ISO_8859_1)
   }
+
   private def get(target: String, close: Boolean): String = {
     val connection = if (close) "close" else "keep-alive"
     s"GET $target HTTP/1.1\r\nHost: fixture\r\nConnection: $connection\r\n\r\n"
   }
+
   private def samples: Seq[Sample] = {
     val decoy = get("/smuggled", close = false)
     val chunked = s"${decoy.length.toHexString}\r\n$decoy\r\n0\r\n\r\n"
@@ -360,10 +365,12 @@ object ProxyBoundaries {
         throw error
     }
   }
+
   private def send(socket: Socket, wire: String): Unit = {
     socket.getOutputStream.write(wire.getBytes(ISO_8859_1))
     socket.getOutputStream.flush()
   }
+
   private def awaitProxy(port: Int): Unit = {
     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
     var ready = false
@@ -376,10 +383,12 @@ object ProxyBoundaries {
     }
     require(ready, "Proxy did not become ready within 15 seconds")
   }
+
   private def expect(reply: Reply, method: String, target: String, body: String): Unit = {
     val wanted = s"$method\t${encoded(target)}\t${encoded(body)}"
     require(reply.status == 200 && reply.body == wanted, s"Wrong response for $target: $reply")
   }
+
   private def readReply(socket: Socket, capture: Option[ByteArrayOutputStream] = None): Reply = {
     val source = socket.getInputStream
     val in = new java.io.FilterInputStream(source) {
@@ -447,4 +456,5 @@ object ProxyBoundaries {
     }
     Reply(status, new String(body.toByteArray, UTF_8))
   }
+
 }

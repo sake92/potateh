@@ -1,11 +1,14 @@
-import scala.util.boundary, boundary.break
 import java.io.IOException
 import java.net.{InetSocketAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.US_ASCII
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
+
 import scala.collection.mutable
+import scala.util.boundary
 import scala.util.control.NonFatal
+
+import boundary.break
 
 /** Bounded loopback observations. Pressure is measured; recovery and cleanup are asserted.
   */
@@ -536,4 +539,5 @@ object SlowClients {
     finally files.close()
     result
   }
+
 }

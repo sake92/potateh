@@ -284,6 +284,7 @@ class ChunkedOutputStreamTest extends munit.FunSuite {
     }
 
     override def close(): Unit = closes += 1
+
   }
 
 }

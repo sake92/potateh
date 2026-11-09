@@ -346,8 +346,11 @@ class FixedLengthOutputStreamTest extends munit.FunSuite {
   private class RecordingOutputStream extends ByteArrayOutputStream {
     var flushes = 0
     var closes = 0
+
     override def flush(): Unit = flushes += 1
+
     override def close(): Unit = closes += 1
+
   }
 
 }

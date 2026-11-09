@@ -4,8 +4,9 @@ import java.nio.ByteBuffer
 import java.nio.channels.{SelectionKey, Selector, SocketChannel}
 import java.nio.charset.StandardCharsets.US_ASCII
 import java.nio.file.{Files, Path}
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, LongAdder}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, TimeUnit}
+
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
@@ -21,12 +22,14 @@ object SustainedLoad {
     val passed = new LongAdder
     val rejected = new LongAdder
     val maxMillis = new AtomicLong
+
     def json: ujson.Obj = ujson.Obj(
       "attempts" -> attempts.sum().toDouble,
       "passed" -> passed.sum().toDouble,
       "transport_failures" -> rejected.sum().toDouble,
       "max_ms" -> maxMillis.get().toDouble
     )
+
   }
 
   def run(
@@ -367,6 +370,7 @@ object SustainedLoad {
     private val socket = channel.socket()
     private val input = socket.getInputStream
     private var received = 0
+
     def send(text: String): Unit = {
       channel.configureBlocking(false)
       val selector = Selector.open()
@@ -385,12 +389,14 @@ object SustainedLoad {
         channel.configureBlocking(true)
       }
     }
+
     private def remaining(): Long = {
       if (Thread.currentThread().isInterrupted) throw new InterruptedException("Client cancelled")
       val left = deadline - System.nanoTime()
       if (left <= 0) throw new SocketTimeoutException("Client exchange deadline exceeded")
       left
     }
+
     private def read(): Int = {
       val left = remaining()
       require(received < 65536, "Response exceeded 64 KiB budget")
@@ -400,6 +406,7 @@ object SustainedLoad {
       received += 1
       byte
     }
+
     private def line(): String = {
       val text = new StringBuilder
       var byte = read()
@@ -411,6 +418,7 @@ object SustainedLoad {
       require(read() == '\n', "Malformed response CRLF")
       text.toString
     }
+
     def response(expected: String, slow: Boolean = false): Unit = {
       val status = line().split(" ", 3)
       require(status.length == 3 && status(0) == "HTTP/1.1" && status(1) == "200", "Unexpected response status")
@@ -450,12 +458,14 @@ object SustainedLoad {
       }
       require(body.toString("US-ASCII") == expected, "Response body was corrupted")
     }
+
     def closed(): Unit = {
       socket.setSoTimeout(math.max(1L, math.min(500L, TimeUnit.NANOSECONDS.toMillis(remaining()))).toInt)
       val byte = try input.read()
       catch { case _: SocketException => -1 }
       require(byte == -1, "Unexpected response after connection close")
     }
+
   }
 
 }

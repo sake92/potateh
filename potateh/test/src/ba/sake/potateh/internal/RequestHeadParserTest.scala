@@ -299,4 +299,5 @@ class RequestHeadParserTest extends munit.FunSuite {
         assertEquals(error.responseCode, code, "Response code for " + wire)
     }
   }
+
 }

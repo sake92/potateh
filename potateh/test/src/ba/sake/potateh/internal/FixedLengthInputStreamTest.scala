@@ -260,4 +260,5 @@ class FixedLengthInputStreamTest extends munit.FunSuite {
   private def stream(value: String): ByteArrayInputStream = {
     new ByteArrayInputStream(value.getBytes(ISO_8859_1))
   }
+
 }

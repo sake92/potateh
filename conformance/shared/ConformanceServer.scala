@@ -1,17 +1,20 @@
 package conformance
 
-import ba.sake.potateh.*
 import java.io.ByteArrayOutputStream
 import java.net.{InetSocketAddress, Socket}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+
 import scala.concurrent.duration.*
+
+import ba.sake.potateh.*
 
 /** Application fixture only; policy and environment access do not enter the library.
   */
 object ConformanceServer {
+
   def main(args: Array[String]): Unit = {
     val profile = sys.env.getOrElse("HTTP_CONFORMANCE_PROFILE", "h1spec")
     require(
@@ -188,4 +191,5 @@ object ConformanceServer {
       catch { case _: IllegalStateException => () }
     }
   }
+
 }

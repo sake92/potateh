@@ -1,8 +1,11 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
 import java.io.{IOException, OutputStream}
 import java.nio.charset.StandardCharsets.US_ASCII
+
+import scala.util.boundary
+
+import boundary.break
 
 /** Emits one chunk per nonempty write on a caller-owned connection stream. Close terminates the body and flushes
   * without closing the sink.
@@ -71,4 +74,5 @@ private[potateh] final class ChunkedOutputStream(
     failure = Some(error)
     throw error
   }
+
 }

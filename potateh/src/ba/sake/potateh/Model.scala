@@ -20,24 +20,31 @@ final class Request private (
     val localAddress: InetSocketAddress,
     val remoteAddress: InetSocketAddress
 ) {
+
   def withMethod(value: String): Request = {
     copy(method = value)
   }
+
   def withTarget(value: String): Request = {
     copy(target = value)
   }
+
   def withVersion(value: HttpVersion): Request = {
     copy(version = value)
   }
+
   def withHeaders(value: Headers): Request = {
     copy(headers = value)
   }
+
   def withBody(value: RequestBody): Request = {
     copy(body = value)
   }
+
   def withLocalAddress(value: InetSocketAddress): Request = {
     copy(localAddress = value)
   }
+
   def withRemoteAddress(value: InetSocketAddress): Request = {
     copy(remoteAddress = value)
   }
@@ -61,9 +68,11 @@ final class Request private (
       remoteAddress
     )
   }
+
 }
 
 object Request {
+
   def apply(
       method: String,
       target: String,
@@ -75,6 +84,7 @@ object Request {
   ): Request = {
     new Request(method, target, version, headers, body, localAddress, remoteAddress)
   }
+
 }
 
 final class Response private (
@@ -87,9 +97,11 @@ final class Response private (
   def withStatus(value: Int): Response = {
     copy(status = value)
   }
+
   def withHeaders(value: Headers): Response = {
     copy(headers = value)
   }
+
   def withBody(value: ResponseBody): Response = {
     copy(body = value)
   }
@@ -105,9 +117,11 @@ final class Response private (
       body
     )
   }
+
 }
 
 object Response {
+
   def apply(
       status: Int = 200,
       headers: Headers = Headers.empty,
@@ -115,6 +129,7 @@ object Response {
   ): Response = {
     new Response(status, headers, body)
   }
+
 }
 
 /** Available only during the callback and its response writer. Close does not drain.
@@ -124,6 +139,7 @@ abstract class RequestBody private[potateh] () extends InputStream {
   /** None until the framed body is complete; Some(empty) for bodies without trailers.
     */
   def trailers: Option[Headers]
+
 }
 
 sealed trait ResponseBody
@@ -145,13 +161,17 @@ object ResponseBody {
     require(length.forall(_ >= 0), "Negative response length")
 
     def withLength(value: Option[Long]): Writer = new Writer(value, write)
+
     def withWrite(value: OutputStream => Unit): Writer = new Writer(length, value)
+
   }
 
   object Writer {
+
     def apply(length: Option[Long] = None)(write: OutputStream => Unit): Writer = {
       new Writer(length, write)
     }
+
   }
 
 }

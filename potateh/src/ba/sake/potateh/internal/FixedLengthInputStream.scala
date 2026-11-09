@@ -1,7 +1,10 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
 import java.io.{EOFException, IOException, InputStream}
+
+import scala.util.boundary
+
+import boundary.break
 
 /** A request body on a caller-owned connection stream. Close neither drains unread bytes nor closes the source. Only a
   * complete body permits reuse.
@@ -83,4 +86,5 @@ private[potateh] final class FixedLengthInputStream(
     failure = Some(error)
     throw error
   }
+
 }

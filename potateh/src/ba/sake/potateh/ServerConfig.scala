@@ -1,6 +1,7 @@
 package ba.sake.potateh
 
 import java.net.InetSocketAddress
+
 import scala.concurrent.duration.*
 
 final class HttpLimits private (
@@ -29,30 +30,39 @@ final class HttpLimits private (
   def withMaxRequestLineBytes(value: Int): HttpLimits = {
     copy(maxRequestLineBytes = value)
   }
+
   def withMaxHeaderLineBytes(value: Int): HttpLimits = {
     copy(maxHeaderLineBytes = value)
   }
+
   def withMaxHeaderSectionBytes(value: Int): HttpLimits = {
     copy(maxHeaderSectionBytes = value)
   }
+
   def withMaxHeaderCount(value: Int): HttpLimits = {
     copy(maxHeaderCount = value)
   }
+
   def withMaxChunkLineBytes(value: Int): HttpLimits = {
     copy(maxChunkLineBytes = value)
   }
+
   def withMaxChunkExtensionBytes(value: Int): HttpLimits = {
     copy(maxChunkExtensionBytes = value)
   }
+
   def withMaxTrailerLineBytes(value: Int): HttpLimits = {
     copy(maxTrailerLineBytes = value)
   }
+
   def withMaxTrailerSectionBytes(value: Int): HttpLimits = {
     copy(maxTrailerSectionBytes = value)
   }
+
   def withMaxTrailerCount(value: Int): HttpLimits = {
     copy(maxTrailerCount = value)
   }
+
   def withMaxBodyBytes(value: Option[Long]): HttpLimits = {
     copy(maxBodyBytes = value)
   }
@@ -142,6 +152,7 @@ final class HttpLimits private (
       maxBodyBytes
     )
   }
+
 }
 
 object HttpLimits {
@@ -186,15 +197,19 @@ final class HttpTimeouts private (
   def withIdleTimeout(value: FiniteDuration): HttpTimeouts = {
     copy(idleTimeout = value)
   }
+
   def withRequestHeadTimeout(value: FiniteDuration): HttpTimeouts = {
     copy(requestHeadTimeout = value)
   }
+
   def withBodyReadTimeout(value: FiniteDuration): HttpTimeouts = {
     copy(bodyReadTimeout = value)
   }
+
   def withWriteTimeout(value: FiniteDuration): HttpTimeouts = {
     copy(writeTimeout = value)
   }
+
   def withShutdownGrace(value: FiniteDuration): HttpTimeouts = {
     copy(shutdownGrace = value)
   }
@@ -238,6 +253,7 @@ final class HttpTimeouts private (
       shutdownGrace
     )
   }
+
 }
 
 object HttpTimeouts {
@@ -265,6 +281,7 @@ final class ServerConfig private (
   def withBindAddress(value: InetSocketAddress): ServerConfig = {
     copy(bindAddress = value)
   }
+
   def withMaxConnections(value: Int): ServerConfig = {
     copy(maxConnections = value)
   }
@@ -280,9 +297,11 @@ final class ServerConfig private (
   def withOnError(value: Throwable => Unit): ServerConfig = {
     copy(onError = value)
   }
+
   def withLimits(value: HttpLimits): ServerConfig = {
     copy(limits = value)
   }
+
   def withTimeouts(value: HttpTimeouts): ServerConfig = {
     copy(timeouts = value)
   }
@@ -304,6 +323,7 @@ final class ServerConfig private (
       timeouts
     )
   }
+
 }
 
 object ServerConfig {

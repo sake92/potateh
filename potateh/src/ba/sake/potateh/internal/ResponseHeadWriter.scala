@@ -1,9 +1,12 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
-import ba.sake.potateh.*
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets.ISO_8859_1
+
+import scala.util.boundary
+
+import boundary.break
+import ba.sake.potateh.*
 
 private[potateh] object ResponseHeadWriter {
 
@@ -270,4 +273,5 @@ private[potateh] object ResponseHeadWriter {
     case 505 => "HTTP Version Not Supported"
     case _   => ""
   }
+
 }

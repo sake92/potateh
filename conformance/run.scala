@@ -10,11 +10,14 @@
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-import mainargs.{arg, main, ParserForMethods}
-import org.apache.tools.ant.types.Commandline
+
 import scala.collection.mutable
+import scala.util.boundary
 import scala.util.control.NonFatal
-import scala.util.boundary, boundary.break
+
+import mainargs.{ParserForMethods, arg, main}
+import org.apache.tools.ant.types.Commandline
+import boundary.break
 
 object ConformanceRunner {
   private val pins = Map(
@@ -457,6 +460,7 @@ object ConformanceRunner {
         if (interrupted) Thread.currentThread().interrupt()
       }
     }
+
   }
 
 }

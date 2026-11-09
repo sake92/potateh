@@ -3,8 +3,9 @@ package ba.sake.potateh
 import java.io.{ByteArrayOutputStream, IOException, InputStream, OutputStream}
 import java.net.{ConnectException, InetSocketAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.ISO_8859_1
-import java.util.concurrent.{CountDownLatch, Executor, Executors, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import java.util.concurrent.{CountDownLatch, Executor, Executors, RejectedExecutionException, TimeUnit}
+
 import scala.concurrent.duration.*
 
 /** Real-wire adaptations of upstream HttpServerTest/HttpServerContractTest. */
@@ -21,9 +22,11 @@ class ServerTest extends munit.FunSuite {
         .withWriteTimeout(500.millis)
         .withShutdownGrace(1.second)
     )
+
   private def response(text: String): Response = {
     Response(body = ResponseBody.bytes(text.getBytes(ISO_8859_1)))
   }
+
   private def withServer[A](
       settings: ServerConfig = config
   )(handle: Request => Response)(test: Server => A): A = {
@@ -31,6 +34,7 @@ class ServerTest extends munit.FunSuite {
     try test(server)
     finally server.stop()
   }
+
   private def withSocket[A](server: Server)(test: Socket => A): A = {
     val socket = new Socket()
     try {
@@ -39,10 +43,12 @@ class ServerTest extends munit.FunSuite {
       test(socket)
     } finally socket.close()
   }
+
   private def send(socket: Socket, wire: String): Unit = {
     socket.getOutputStream.write(wire.getBytes(ISO_8859_1))
     socket.getOutputStream.flush()
   }
+
   private def line(input: InputStream): String = {
     val out = new StringBuilder
     var byte = input.read()
@@ -99,6 +105,7 @@ class ServerTest extends munit.FunSuite {
     }
     Received(status, headers, new String(out.toByteArray, ISO_8859_1))
   }
+
   private def get(
       target: String = "/",
       version: String = "HTTP/1.1",
@@ -106,11 +113,13 @@ class ServerTest extends munit.FunSuite {
   ): String = {
     s"GET $target $version\r\nHost: localhost\r\n$fields\r\n"
   }
+
   private def closed(socket: Socket): Unit = {
     val actual = try socket.getInputStream.read()
     catch { case _: SocketException => -1 }
     assertEquals(actual, -1)
   }
+
   private def admissionRejected(server: Server): Unit = {
     val socket = new Socket()
     try {
@@ -126,6 +135,7 @@ class ServerTest extends munit.FunSuite {
       }
     } finally socket.close()
   }
+
   private def await(latch: CountDownLatch): Unit = {
     val completed = latch.await(3, TimeUnit.SECONDS)
     assert(completed)
@@ -1064,6 +1074,7 @@ class ServerTest extends munit.FunSuite {
     }
     rebound.stop()
   }
+
   private def eventually()(assertion: => Unit): Unit = {
     val deadline = System.nanoTime() + 2.seconds.toNanos
     var done = false
@@ -1076,6 +1087,7 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+
   test(
     "exact decoded limits preserve pipeline and None permits large fixed and chunked uploads"
   ) {

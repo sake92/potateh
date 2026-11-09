@@ -3,6 +3,7 @@ package ba.sake.potateh.internal
 import java.io.{IOException, OutputStream}
 import java.net.{Socket, SocketTimeoutException}
 import java.util.concurrent.locks.ReentrantLock
+
 import scala.collection.mutable
 
 /** One server-owned watcher; deadlines cover socket writes, never handler computation.
@@ -21,6 +22,7 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
     stopped = true
     changed.signalAll()
   }
+
   def output(socket: Socket): OutputStream = {
     val raw = socket.getOutputStream()
     new OutputStream {
@@ -31,6 +33,7 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
       override def flush(): Unit = timed(socket)(raw.flush())
     }
   }
+
   private def timed(socket: Socket)(operation: => Unit): Unit = {
     val write = new Pending(socket, System.nanoTime() + timeoutNanos)
     withLock {
@@ -51,6 +54,7 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
       }
     }
   }
+
   private def watch(): Unit = {
     try {
       withLock {
@@ -75,6 +79,7 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
       }
     }
   }
+
   private inline def withLock[A](inline operation: A): A = {
     lock.lock()
     try operation
@@ -83,4 +88,5 @@ private[potateh] final class WriteTimeouts(timeoutNanos: Long) {
 
   private def close(socket: Socket): Unit = try socket.close()
   catch { case _: IOException => () }
+
 }

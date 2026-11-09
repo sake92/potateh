@@ -6,11 +6,15 @@ import java.util.concurrent.Executor
 /** A running server. Stopping is terminal and uses the configured grace budget.
   */
 final class Server private (private val engine: internal.BlockingServer) {
+
   def address: InetSocketAddress = engine.address
+
   def stop(): Unit = engine.stop()
+
 }
 
 object Server {
+
   def start(
       config: ServerConfig = ServerConfig.Default
   )(handle: Request => Response): Server = {
@@ -43,4 +47,5 @@ object Server {
         throw error
     }
   }
+
 }

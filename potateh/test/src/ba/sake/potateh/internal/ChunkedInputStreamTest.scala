@@ -445,4 +445,5 @@ class ChunkedInputStreamTest extends munit.FunSuite {
     }
     new String(output.toByteArray(), ISO_8859_1)
   }
+
 }

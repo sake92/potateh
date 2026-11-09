@@ -1,8 +1,11 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
 import java.io.{EOFException, IOException, InputStream}
 import java.net.ProtocolException
+
+import scala.util.boundary
+
+import boundary.break
 
 private[potateh] object ChunkedInputStream {
 
@@ -44,7 +47,9 @@ private[potateh] final class ChunkedInputStream(
   private var failure: Option[IOException] = None
 
   private var trailerFields = ba.sake.potateh.Headers.empty
+
   def terminalFailure: Option[IOException] = failure
+
   def trailers: Option[ba.sake.potateh.Headers] = {
     Option.when(isComplete)(trailerFields)
   }
@@ -265,4 +270,5 @@ private[potateh] final class ChunkedInputStream(
     failure = Some(error)
     throw error
   }
+
 }

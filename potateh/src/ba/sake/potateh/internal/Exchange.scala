@@ -1,11 +1,14 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
-import ba.sake.potateh.*
 import java.io.{IOException, InputStream, OutputStream}
 import java.net.{Socket, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.US_ASCII
+
+import scala.util.boundary
 import scala.util.control.NonFatal
+
+import boundary.break
+import ba.sake.potateh.*
 
 /** All mutable exchange state belongs to its connection worker. */
 private[potateh] final class Exchange(
@@ -39,11 +42,13 @@ private[potateh] final class Exchange(
         limits.maxBodyBytes
       )
   }
+
   private def complete: Boolean = framed match {
     case body: FixedLengthInputStream => body.isComplete
     case body: ChunkedInputStream     => body.isComplete
     case _                            => false
   }
+
   private val body = new RequestBody {
     private var closed = false
     override def trailers: Option[Headers] = {
@@ -198,6 +203,7 @@ private[potateh] final class Exchange(
       body.close()
     }
   }
+
   private def reject(code: Int): Unit = {
     if (!committed) {
       val prepared = {
@@ -208,6 +214,8 @@ private[potateh] final class Exchange(
       output.flush()
     }
   }
+
   private def closeSocket(): Unit = try socket.close()
   catch { case _: IOException => () }
+
 }

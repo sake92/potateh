@@ -1,8 +1,11 @@
 package ba.sake.potateh.internal
 
-import scala.util.boundary, boundary.break
+import scala.util.boundary
+
+import boundary.break
 
 private[potateh] object HttpSyntax {
+
   def field(line: String): Option[(name: String, value: String)] = boundary {
     val colon = line.indexOf(':')
     if (colon <= 0 || !line.substring(0, colon).forall(isToken)) break(None)
@@ -30,4 +33,5 @@ private[potateh] object HttpSyntax {
   def isFieldValue(value: String): Boolean = {
     value.forall(c => c == '\t' || (c >= ' ' && c != 127 && c <= 255))
   }
+
 }
