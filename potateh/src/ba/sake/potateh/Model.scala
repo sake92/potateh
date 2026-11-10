@@ -18,8 +18,18 @@ final class Request private (
     val headers: Headers,
     val body: RequestBody,
     val localAddress: InetSocketAddress,
-    val remoteAddress: InetSocketAddress
+    val remoteAddress: InetSocketAddress,
+    private val completion: internal.ResponseCompletion
 ) {
+
+  /** Registers cleanup on the connection worker after response processing, including failures and skipped bodies.
+    * Register during the handler or body writer. Each registration runs once, in registration order, after output
+    * flushing (or its failure). Nonfatal cleanup failures are reported through ServerConfig.onError and do not skip
+    * other callbacks. Request copies share the same lifecycle. This does not imply client receipt of the response.
+    */
+  def onResponseComplete(cleanup: => Unit): Unit = completion.add(() => cleanup)
+
+  private[potateh] def completeResponse(report: Throwable => Unit): Unit = completion.finish(report)
 
   def withMethod(value: String): Request = {
     copy(method = value)
@@ -65,7 +75,8 @@ final class Request private (
       headers,
       body,
       localAddress,
-      remoteAddress
+      remoteAddress,
+      completion
     )
   }
 
@@ -82,7 +93,7 @@ object Request {
       localAddress: InetSocketAddress,
       remoteAddress: InetSocketAddress
   ): Request = {
-    new Request(method, target, version, headers, body, localAddress, remoteAddress)
+    new Request(method, target, version, headers, body, localAddress, remoteAddress, new internal.ResponseCompletion)
   }
 
 }

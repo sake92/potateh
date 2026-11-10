@@ -19,6 +19,7 @@ private[potateh] final class Exchange(
     config: ServerConfig,
     handle: Request => Response
 ) {
+  private var activeRequest: Option[Request] = None
   private var committed = false
   private var failure: Option[IOException] = None
   private var live = true
@@ -176,6 +177,7 @@ private[potateh] final class Exchange(
         socket.getLocalSocketAddress().asInstanceOf[java.net.InetSocketAddress],
         socket.getRemoteSocketAddress().asInstanceOf[java.net.InetSocketAddress]
       )
+      activeRequest = Some(request)
       val response = handle(request)
       failure.foreach(throw _)
       // Writers may still consume the request, so incomplete input is checked again after writing.
@@ -200,7 +202,8 @@ private[potateh] final class Exchange(
         false
     } finally {
       live = false
-      body.close()
+      try body.close()
+      finally activeRequest.foreach(_.completeResponse(config.onError))
     }
   }
 
