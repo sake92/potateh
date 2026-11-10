@@ -88,6 +88,20 @@ class ResponseHeadWriterTest extends munit.FunSuite {
     }
     assert(text(prepared(ResponseBody.Empty).bytes).contains("Content-Length: 0\r\n"))
   }
+  test("requires valid upgrade protocols for 426 and manages the connection option") {
+    val response = Response(426, Headers("Upgrade" -> "HTTP/2.0, websocket"))
+    val persistent = text(prepare("GET", "HTTP/1.1", response, false).bytes)
+    assert(persistent.contains("Upgrade: HTTP/2.0, websocket\r\n"))
+    assert(persistent.contains("Connection: upgrade\r\n"))
+    val closing = text(prepare("GET", "HTTP/1.1", response, true).bytes)
+    assert(closing.contains("Connection: close, upgrade\r\n"))
+    val old = text(prepare("GET", "HTTP/1.0", response, false).bytes)
+    assert(old.contains("Connection: keep-alive, upgrade\r\n"))
+    for (value <- List("", ",,", "HTTP/", "/2", "HTTP/2/3", "bad protocol")) {
+      intercept[IllegalArgumentException](prepare("GET", "HTTP/1.1", Response(426, Headers("Upgrade" -> value)), false))
+    }
+    intercept[IllegalArgumentException](prepare("GET", "HTTP/1.1", Response(426), false))
+  }
   test(
     "rejects conflicts, response splitting, informational responses and tunnels before emission"
   ) {

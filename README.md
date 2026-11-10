@@ -86,6 +86,13 @@ handler or response writer. The server manages HTTP framing and connection
 headers. If the request body is incomplete when the handler returns, the server
 signals connection closure, even if the response writer finishes reading it.
 
+The request exposes the raw target and received headers. For an absolute
+request target, applications routing by authority must use the target URI's
+authority instead of the `Host` header. Applications are responsible for
+status-specific headers, such as `WWW-Authenticate` for a 401 response. A 426
+response must include an `Upgrade` header listing acceptable protocols; the
+server adds the required `Connection` option. Protocol switching is not supported.
+
 For HEAD and 304 responses, the default empty body omits `Content-Length`.
 To supply the corresponding GET or 200 representation's length, use
 `ResponseBody.bytes` or a `ResponseBody.Writer` with a known length. The server

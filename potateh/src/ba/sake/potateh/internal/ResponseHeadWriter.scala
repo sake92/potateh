@@ -57,8 +57,21 @@ private[potateh] object ResponseHeadWriter {
     )
     response.headers.fields.foreach { case (key, _) =>
       require(
-        !managed.exists(_.equalsIgnoreCase(key)),
+        !managed.exists(_.equalsIgnoreCase(key)) || (status == 426 && key.equalsIgnoreCase("Upgrade")),
         "Engine owns framing and connection headers"
+      )
+    }
+    if (status == 426) {
+      val protocols = HttpSyntax.listElements(response.headers.all("Upgrade")).getOrElse(Vector.empty)
+      require(
+        protocols.nonEmpty && protocols.forall { protocol =>
+          val slash = protocol.indexOf('/')
+          val name = if (slash < 0) protocol else protocol.substring(0, slash)
+          val version = if (slash < 0) None else Some(protocol.substring(slash + 1))
+          name.nonEmpty && name.forall(HttpSyntax.isToken) &&
+          version.forall(value => value.nonEmpty && value.forall(HttpSyntax.isToken))
+        },
+        "426 requires valid Upgrade protocols"
       )
     }
     val forbidden = status == 204
@@ -91,7 +104,10 @@ private[potateh] object ResponseHeadWriter {
     if (framing == Chunked) {
       headers = headers.add("Transfer-Encoding", "chunked")
     }
-    if (closes) headers = headers.add("Connection", "close")
+    if (closes && status == 426) headers = headers.add("Connection", "close, upgrade")
+    else if (status == 426 && version == "HTTP/1.0") headers = headers.add("Connection", "keep-alive, upgrade")
+    else if (status == 426) headers = headers.add("Connection", "upgrade")
+    else if (closes) headers = headers.add("Connection", "close")
     else if (version == "HTTP/1.0") {
       headers = headers.add("Connection", "keep-alive")
     }

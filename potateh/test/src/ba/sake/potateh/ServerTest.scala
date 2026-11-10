@@ -662,6 +662,22 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("sends a 426 upgrade requirement and retains a persistent connection") {
+    withServer() { request =>
+      if (request.target == "/upgrade") Response(426, Headers("Upgrade" -> "HTTP/2.0"))
+      else response("ok")
+    } { server =>
+      withSocket(server) { socket =>
+        send(socket, get("/upgrade") + get(fields = "Connection: close\r\n"))
+        val actual = receive(socket)
+        assertEquals(actual.status, 426)
+        assertEquals(actual.headers.first("Upgrade"), Some("HTTP/2.0"))
+        assertEquals(actual.headers.first("Connection"), Some("upgrade"))
+        assertEquals(receive(socket).body, "ok")
+        closed(socket)
+      }
+    }
+  }
   test("handles higher minor versions, leading CRLF and upgrade offers") {
     withServer()(request => response(request.version.toString)) { server =>
       withSocket(server) { socket =>

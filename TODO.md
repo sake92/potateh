@@ -1,8 +1,5 @@
 # Planned improvements
 
-- [ ] Clarify application responsibilities for absolute-target authority and
-  status-specific response fields; currently 426 requires an `Upgrade` field
-  that the response writer forbids (RFC 9112 section 3.2.2; RFC 9110 section 7.8).
 - [ ] Add protocol upgrade support for a separate WebSocket implementation:
   preserve buffered input, define stream lifetime/timeouts, and retain connection
   admission and shutdown ownership.
