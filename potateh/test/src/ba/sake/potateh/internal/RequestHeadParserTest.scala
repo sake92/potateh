@@ -43,6 +43,37 @@ class RequestHeadParserTest extends munit.FunSuite {
     assertEquals(parse("OPTIONS * HTTP/1.1\r\nHost:\r\n\r\n").framing, NoBody)
   }
 
+  test("accepts registered names in Host and request target authorities") {
+    for (host <- List("foo_bar", "%65xample.org", "a!$&'()*+,;=~b")) {
+      assertEquals(parse(s"GET / HTTP/1.1\r\nHost: $host:8080\r\n\r\n").headers.head.value, s"$host:8080")
+      val absolute = s"http://$host:8080/path"
+      assertEquals(parse(s"GET $absolute HTTP/1.1\r\nHost: x\r\n\r\n").target, absolute)
+      val authority = s"$host:443"
+      assertEquals(parse(s"CONNECT $authority HTTP/1.1\r\nHost: x\r\n\r\n").target, authority)
+    }
+    val longHost = "a" * 4000
+    assertEquals(parse(s"GET / HTTP/1.1\r\nHost: $longHost\r\n\r\n").headers.head.value, longHost)
+  }
+
+  test("rejects malformed registered name authorities") {
+    for (
+      authority <- List(
+        "bad%2",
+        "bad%GG",
+        "host:abc",
+        "host:1:2",
+        "user@foo_bar",
+        ":80",
+        "[not-ip]:80",
+        "foo_bar:999999999999999999999"
+      )
+    ) {
+      rejected(s"GET / HTTP/1.1\r\nHost: $authority\r\n\r\n", 400)
+      rejected(s"GET http://$authority/path HTTP/1.1\r\nHost: x\r\n\r\n", 400)
+      rejected(s"CONNECT $authority HTTP/1.1\r\nHost: x\r\n\r\n", 400)
+    }
+  }
+
   test("rejectsMalformedRequestLines") {
     List(
       "GET  / HTTP/1.1",
@@ -88,7 +119,6 @@ class RequestHeadParserTest extends munit.FunSuite {
       "Host: x\r\nX: bad\u000bvalue\r\n",
       "Host: x\nX: y\r\n",
       "Host: x\rX: y\r\n",
-      "Host: x,y\r\n",
       "Host: user@host\r\n",
       "Host: host/path\r\n",
       "Host: host?query\r\n",

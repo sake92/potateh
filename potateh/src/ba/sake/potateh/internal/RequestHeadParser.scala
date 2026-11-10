@@ -176,7 +176,7 @@ private[potateh] object RequestHeadParser {
     } else if (method == "CONNECT") {
       val uri = parseUri("http://" + target)
       if (
-        Option(uri.getHost()).isEmpty || uri.getPort() < 0 || uri
+        !validAuthority(uri, requirePort = true) || uri
           .getRawPath() != "" ||
         Option(uri.getRawQuery()).nonEmpty || Option(
           uri.getRawUserInfo()
@@ -194,7 +194,7 @@ private[potateh] object RequestHeadParser {
         !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(
           uri.getScheme()
         )) ||
-        Option(uri.getHost()).isEmpty || Option(uri.getRawUserInfo()).nonEmpty
+        !validAuthority(uri, requirePort = false)
       ) {
         fail(400, "Invalid absolute request target")
       }
@@ -206,9 +206,7 @@ private[potateh] object RequestHeadParser {
     if (value.nonEmpty) {
       val uri = parseUri("http://" + value)
       if (
-        Option(uri.getHost()).isEmpty || Option(
-          uri.getRawUserInfo()
-        ).nonEmpty ||
+        !validAuthority(uri, requirePort = false) ||
         uri.getRawPath() != "" || Option(uri.getRawQuery()).nonEmpty || Option(
           uri.getRawFragment()
         ).nonEmpty
@@ -216,6 +214,56 @@ private[potateh] object RequestHeadParser {
         fail(400, "Invalid Host")
       }
     }
+  }
+
+  private def validAuthority(uri: URI, requirePort: Boolean): Boolean = {
+    val authority = Option(uri.getRawAuthority()).getOrElse("")
+    val closingBracket = authority.indexOf(']')
+    val separator = {
+      if (authority.startsWith("[") && closingBracket >= 0) closingBracket + 1
+      else {
+        authority.indexOf(':') match {
+          case -1    => authority.length
+          case index => index
+        }
+      }
+    }
+    val host = authority.substring(0, separator)
+    val suffix = authority.substring(separator)
+    val validHost = {
+      if (host.startsWith("[")) Option(uri.getHost()).nonEmpty
+      else validRegisteredName(host)
+    }
+    val validPort = {
+      if (suffix.isEmpty) !requirePort
+      else if (!suffix.startsWith(":")) false
+      else {
+        val port = suffix.substring(1)
+        if (port.isEmpty) !requirePort
+        else port.forall(c => c >= '0' && c <= '9') && port.toIntOption.nonEmpty
+      }
+    }
+    validHost && validPort
+  }
+
+  private def validRegisteredName(host: String): Boolean = {
+    def hex(c: Char): Boolean = {
+      (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+    }
+    var index = 0
+    var valid = host.nonEmpty
+    while (index < host.length && valid) {
+      val c = host.charAt(index)
+      if (c == '%') {
+        valid = index + 2 < host.length && hex(host.charAt(index + 1)) && hex(host.charAt(index + 2))
+        index += 3
+      } else {
+        valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || "-._~!$&'()*+,;=".contains(c)
+        index += 1
+      }
+    }
+    valid
   }
 
   private def parseUri(value: String): URI = {
