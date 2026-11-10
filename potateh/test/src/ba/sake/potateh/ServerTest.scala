@@ -488,6 +488,37 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("HTTP/1.0 ignores 100-continue and upgrade while reading the body") {
+    val calls = new AtomicInteger
+    withServer() { request =>
+      calls.incrementAndGet()
+      val out = new ByteArrayOutputStream
+      request.body.transferTo(out)
+      response(new String(out.toByteArray, ISO_8859_1))
+    } { server =>
+      for (
+        fields <- List(
+          "Expect: 100-continue\r\n",
+          "Upgrade: websocket\r\n",
+          "Connection: upgrade\r\n",
+          "Expect: 100-continue\r\nUpgrade: websocket\r\nConnection: upgrade\r\n"
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(socket, "POST / HTTP/1.0\r\nContent-Length: 3\r\n" + fields + "\r\nabc")
+          val actual = receive(socket)
+          assertEquals(actual.status, 200)
+          assertEquals(actual.body, "abc")
+          closed(socket)
+        }
+      }
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.0\r\nExpect: 100-continue, fancy\r\nContent-Length: 0\r\n\r\n")
+        assertEquals(receive(socket).status, 417)
+      }
+      assertEquals(calls.get(), 4)
+    }
+  }
   test(
     "oversized declared bodies and unsupported expectations skip dispatch and continuation"
   ) {

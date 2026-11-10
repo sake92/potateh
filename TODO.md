@@ -1,8 +1,6 @@
 # Planned improvements
 
 - [ ] Close RFC audit gaps with shared JVM/Native regression tests:
-  - Ignore HTTP/1.0 `Expect: 100-continue` and `Upgrade` fields instead of
-    returning 417/501 (RFC 9110 sections 10.1.1 and 7.8).
   - Accept a bounded number of empty list elements in `Transfer-Encoding` and
     `Expect`, preserving framing-conflict checks (RFC 9110 section 5.6.1.2).
 - [ ] Review interoperability policies: higher HTTP/1 minor versions, a leading

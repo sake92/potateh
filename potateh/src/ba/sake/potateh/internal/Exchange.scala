@@ -93,7 +93,7 @@ private[potateh] final class Exchange(
       check()
       guard {
         if (
-          !complete && !continued && headers
+          head.version == "HTTP/1.1" && !complete && !continued && headers
             .all("Expect")
             .nonEmpty && !committed
         ) {
@@ -133,17 +133,14 @@ private[potateh] final class Exchange(
           break(false)
         case _ => ()
       }
-      if (head.method == "CONNECT" || headers.first("Upgrade").nonEmpty) {
+      if (head.method == "CONNECT" || (head.version == "HTTP/1.1" && headers.first("Upgrade").nonEmpty)) {
         reject(501)
         break(false)
       }
       val expectations = {
         headers.all("Expect").flatMap(_.split(",", -1)).map(HttpSyntax.trimOws)
       }
-      if (
-        expectations.nonEmpty && (head.version != "HTTP/1.1" || expectations
-          .exists(!_.equalsIgnoreCase("100-continue")))
-      ) {
+      if (expectations.exists(!_.equalsIgnoreCase("100-continue"))) {
         reject(417)
         break(false)
       }
@@ -156,7 +153,7 @@ private[potateh] final class Exchange(
         reject(400)
         break(false)
       }
-      if (options.exists(_.equalsIgnoreCase("upgrade"))) {
+      if (head.version == "HTTP/1.1" && options.exists(_.equalsIgnoreCase("upgrade"))) {
         reject(501)
         break(false)
       }
