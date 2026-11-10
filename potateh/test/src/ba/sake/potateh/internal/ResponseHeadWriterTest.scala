@@ -75,6 +75,19 @@ class ResponseHeadWriterTest extends munit.FunSuite {
       } else assert(text(result.bytes).contains("Content-Length: 4\r\n"))
     }
   }
+  test("HEAD and 304 only report an explicitly supplied representation length") {
+    for ((method, status) <- List(("HEAD", 200), ("GET", 304))) {
+      val empty = text(prepared(ResponseBody.Empty, method, status = status).bytes)
+      assert(!empty.contains("Content-Length:"))
+      val unknown = text(prepared(ResponseBody.Writer()(_ => ()), method, status = status).bytes)
+      assert(!unknown.contains("Content-Length:"))
+      val zero = text(prepared(ResponseBody.bytes(Array.emptyByteArray), method, status = status).bytes)
+      assert(zero.contains("Content-Length: 0\r\n"))
+      val known = text(prepared(ResponseBody.Writer(Some(7))(_ => ()), method, status = status).bytes)
+      assert(known.contains("Content-Length: 7\r\n"))
+    }
+    assert(text(prepared(ResponseBody.Empty).bytes).contains("Content-Length: 0\r\n"))
+  }
   test(
     "rejects conflicts, response splitting, informational responses and tunnels before emission"
   ) {

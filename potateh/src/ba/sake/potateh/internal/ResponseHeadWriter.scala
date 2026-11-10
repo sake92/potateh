@@ -61,9 +61,12 @@ private[potateh] object ResponseHeadWriter {
         "Engine owns framing and connection headers"
       )
     }
-    val size = length(response.body)
     val forbidden = status == 204
     val metadata = method == "HEAD" || status == 304
+    val size = {
+      if (metadata && response.body == ResponseBody.Empty) None
+      else length(response.body)
+    }
     val framing = {
       if (forbidden || metadata || status == 205) NoBody
       else {

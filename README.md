@@ -86,6 +86,12 @@ handler or response writer. The server manages HTTP framing and connection
 headers. If the request body is incomplete when the handler returns, the server
 signals connection closure, even if the response writer finishes reading it.
 
+For HEAD and 304 responses, the default empty body omits `Content-Length`.
+To supply the corresponding GET or 200 representation's length, use
+`ResponseBody.bytes` or a `ResponseBody.Writer` with a known length. The server
+does not send the body for these responses; the handler must ensure that the
+supplied length matches the representation.
+
 The default executor uses platform threads, with one worker per connection.
 Idle keep-alive connections retain a worker and a connection slot, so increasing
 `maxConnections` also increases potential thread and memory use.

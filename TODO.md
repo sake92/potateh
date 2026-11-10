@@ -8,9 +8,6 @@
   - Validate URI registered names without depending on `URI.getHost` accepting
     them: valid hosts such as `foo_bar` and `%65xample.org` currently get 400
     (RFC 9110 section 7.2; RFC 3986 section 3.2.2).
-  - Avoid inferring representation length from an empty HEAD/304 body;
-    omit length metadata when the corresponding GET/200 length is unknown
-    (RFC 9110 section 8.6).
 - [ ] Review interoperability policies: higher HTTP/1 minor versions, a leading
   CRLF, and ignoring unselected HTTP/1.1 upgrade offers (RFC 9110 sections 2.5
   and 7.8; RFC 9112 section 2.2).
