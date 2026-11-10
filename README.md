@@ -83,7 +83,8 @@ Read a request body through `request.body`, an `InputStream`. For streaming
 responses, use `ResponseBody.Writer` with a synchronous `OutputStream => Unit`
 callback. Body streams belong to their exchange: use them only inside the
 handler or response writer. The server manages HTTP framing and connection
-headers. Unread request bodies prevent connection reuse.
+headers. If the request body is incomplete when the handler returns, the server
+signals connection closure, even if the response writer finishes reading it.
 
 The default executor uses platform threads, with one worker per connection.
 Idle keep-alive connections retain a worker and a connection slot, so increasing

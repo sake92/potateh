@@ -180,12 +180,12 @@ private[potateh] final class Exchange(
       activeRequest = Some(request)
       val response = handle(request)
       failure.foreach(throw _)
-      // Writers may still consume the request, so incomplete input is checked again after writing.
+      // A writer may consume the body, but headers must commit to closure before it runs.
       val prepared = ResponseHeadWriter.prepare(
         head.method,
         head.version,
         response,
-        !persistent
+        !persistent || !complete
       )
       committed = true
       output.write(prepared.bytes)

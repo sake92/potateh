@@ -49,8 +49,10 @@ execution deadline.
 
 The exchange owns stream lifetimes and protocol decisions, including lazy
 `100 Continue`, bodyless responses and connection reuse. A response writer may
-still consume the request body. Unread request bodies and terminal framing
-failures prevent reuse; unread bodies are not drained.
+still consume the request body. If the body is incomplete when response headers
+are sent, the response signals connection closure, even if the writer finishes
+reading it. Unread bodies are not drained; terminal framing failures also prevent
+reuse.
 Exceptions caught during an exchange are reported through `ServerConfig.onError`
 (default: print the stack trace to stderr). Reporting runs synchronously on the
 connection worker and may run concurrently across connections. Nonfatal reporter

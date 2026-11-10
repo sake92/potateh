@@ -556,11 +556,10 @@ class ServerTest extends munit.FunSuite {
           socket,
           "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\n\r\nabc"
         )
-        assertEquals(receive(socket).body, "abc")
+        val actual = receive(socket)
+        assertEquals(actual.body, "abc")
+        assertEquals(actual.headers.first("Connection"), Some("close"))
         await(ended)
-        // A subsequent exchange establishes that prior exchange cleanup has finished.
-        send(socket, get(fields = "Connection: close\r\n"))
-        assertEquals(receive(socket).status, 200)
         closed(socket)
         intercept[IOException](escaped.get().read())
       }
@@ -579,9 +578,19 @@ class ServerTest extends munit.FunSuite {
           socket,
           "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 999\r\n\r\n" + get()
         )
-        assertEquals(receive(socket).body, "ok")
+        val actual = receive(socket)
+        assertEquals(actual.body, "ok")
+        assertEquals(actual.headers.first("Connection"), Some("close"))
         closed(socket)
         assertEquals(calls.get(), 1)
+      }
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\nExpect: 100-continue\r\n\r\n")
+        val actual = receive(socket)
+        assertEquals(actual.status, 200)
+        assertEquals(actual.headers.first("Connection"), Some("close"))
+        closed(socket)
+        assertEquals(calls.get(), 2)
       }
     }
   }
