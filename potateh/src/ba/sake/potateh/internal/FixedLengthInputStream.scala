@@ -20,8 +20,6 @@ private[potateh] final class FixedLengthInputStream(
   private var closed = false
   private var failure: Option[IOException] = None
 
-  def terminalFailure: Option[IOException] = failure
-
   def isComplete: Boolean = remaining == 0 && failure.isEmpty
 
   override def read(): Int = boundary {

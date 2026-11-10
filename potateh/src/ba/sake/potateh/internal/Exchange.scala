@@ -143,11 +143,10 @@ private[potateh] final class Exchange(
         break(false)
       }
       expectContinue = expectations.nonEmpty
-      val options = headers
-        .all("Connection")
-        .flatMap(_.split(",", -1))
-        .map(HttpSyntax.trimOws)
-        .filter(_.nonEmpty)
+      val options = HttpSyntax.listElements(headers.all("Connection")).getOrElse {
+        reject(400)
+        break(false)
+      }
       if (!options.forall(_.forall(HttpSyntax.isToken))) {
         reject(400)
         break(false)

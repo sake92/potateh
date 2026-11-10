@@ -423,6 +423,38 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("connection options tolerate bounded empty elements across fields") {
+    val calls = new AtomicInteger
+    withServer() { _ =>
+      calls.incrementAndGet()
+      response("ok")
+    } { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          get(fields = "Connection: ,,,,\r\nConnection: ,,,keep-alive\r\n") +
+            get(fields = "Connection: ,ClOsE,\r\n")
+        )
+        assertEquals(receive(socket).body, "ok")
+        assertEquals(receive(socket).body, "ok")
+        closed(socket)
+      }
+      for (
+        fields <- List(
+          "Connection: ,,,,,,,,,close\r\n",
+          "Connection: ,,,,\r\nConnection: ,,,,close\r\n",
+          "Connection: keep alive\r\n"
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(socket, get(fields = fields))
+          assertEquals(receive(socket).status, 400)
+          closed(socket)
+        }
+      }
+      assertEquals(calls.get(), 2)
+    }
+  }
   test(
     "HTTP10 persistence is explicit and unknown lengths are close delimited"
   ) {

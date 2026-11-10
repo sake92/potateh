@@ -48,8 +48,6 @@ private[potateh] final class ChunkedInputStream(
 
   private var trailerFields = ba.sake.potateh.Headers.empty
 
-  def terminalFailure: Option[IOException] = failure
-
   def trailers: Option[ba.sake.potateh.Headers] = {
     Option.when(isComplete)(trailerFields)
   }
