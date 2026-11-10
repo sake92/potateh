@@ -91,25 +91,26 @@ private[potateh] object ResponseHeadWriter {
       }
     }
     val closes = close || framing == CloseDelimited
-    var headers = response.headers
-    if (headers.first("Date").isEmpty) {
-      headers = headers.add("Date", httpDate(System.currentTimeMillis()))
+    val headers = Vector.newBuilder[(name: String, value: String)]
+    headers ++= response.headers.fields
+    if (response.headers.first("Date").isEmpty) {
+      headers += ((name = "Date", value = httpDate(System.currentTimeMillis())))
     }
     if (!forbidden) {
-      if (status == 205) headers = headers.add("Content-Length", "0")
+      if (status == 205) headers += ((name = "Content-Length", value = "0"))
       else {
-        size.foreach(value => headers = headers.add("Content-Length", value.toString))
+        size.foreach(value => headers += ((name = "Content-Length", value = value.toString)))
       }
     }
     if (framing == Chunked) {
-      headers = headers.add("Transfer-Encoding", "chunked")
+      headers += ((name = "Transfer-Encoding", value = "chunked"))
     }
-    if (closes && status == 426) headers = headers.add("Connection", "close, upgrade")
-    else if (status == 426 && version == "HTTP/1.0") headers = headers.add("Connection", "keep-alive, upgrade")
-    else if (status == 426) headers = headers.add("Connection", "upgrade")
-    else if (closes) headers = headers.add("Connection", "close")
+    if (closes && status == 426) headers += ((name = "Connection", value = "close, upgrade"))
+    else if (status == 426 && version == "HTTP/1.0") headers += ((name = "Connection", value = "keep-alive, upgrade"))
+    else if (status == 426) headers += ((name = "Connection", value = "upgrade"))
+    else if (closes) headers += ((name = "Connection", value = "close"))
     else if (version == "HTTP/1.0") {
-      headers = headers.add("Connection", "keep-alive")
+      headers += ((name = "Connection", value = "keep-alive"))
     }
     val head = new StringBuilder
     head
@@ -119,7 +120,7 @@ private[potateh] object ResponseHeadWriter {
       .append(' ')
       .append(reason(status))
       .append("\r\n")
-    headers.fields.foreach { case (name, value) =>
+    headers.result().foreach { case (name, value) =>
       head.append(name).append(": ").append(value).append("\r\n")
     }
     head.append("\r\n")

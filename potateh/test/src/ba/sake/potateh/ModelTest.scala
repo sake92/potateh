@@ -76,6 +76,19 @@ class ModelTest extends munit.FunSuite {
     intercept[IllegalArgumentException](Headers("x\r\nBad" -> "y"))
     intercept[IllegalArgumentException](Headers("x" -> "y\r\nBad: z"))
   }
+  test("header construction and updates validate fields and preserve originals") {
+    val original = Headers("X-A" -> "one", "x-a" -> "two", "Other" -> "three")
+    assertEquals(
+      original.add("X-A", "four").fields,
+      Vector("X-A" -> "one", "x-a" -> "two", "Other" -> "three", "X-A" -> "four")
+    )
+    for ((name, value) <- List("Bad Name" -> "ok", "X-Good" -> "bad\r\nValue: injected")) {
+      intercept[IllegalArgumentException](Headers.from(Vector("X-Valid" -> "ok", name -> value)))
+      intercept[IllegalArgumentException](original.add(name, value))
+      intercept[IllegalArgumentException](original.set(name, value))
+    }
+    assertEquals(original.fields, Vector("X-A" -> "one", "x-a" -> "two", "Other" -> "three"))
+  }
   test("configuration rejects invalid bounds before binding") {
     intercept[IllegalArgumentException](ServerConfig.Default.withMaxConnections(0))
     for (backlog <- List(0, -1)) intercept[IllegalArgumentException](ServerConfig.Default.withBacklog(backlog))

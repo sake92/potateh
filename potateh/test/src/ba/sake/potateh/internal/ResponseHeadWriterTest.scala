@@ -38,6 +38,17 @@ class ResponseHeadWriterTest extends munit.FunSuite {
       "HTTP/1.1 201 Created\r\nDate: " + date + "\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\nContent-Length: 1\r\n\r\n"
     )
   }
+  test("preserves application header order before managed chunked and connection fields") {
+    val headers = Headers("Set-Cookie" -> "a=1", "Date" -> date, "Set-Cookie" -> "b=2")
+    val response = Response(200, headers, ResponseBody.Writer()(_ => ()))
+    val result = prepare("GET", "HTTP/1.1", response, true)
+    assertEquals(
+      text(result.bytes),
+      "HTTP/1.1 200 OK\r\nSet-Cookie: a=1\r\nDate: " + date +
+        "\r\nSet-Cookie: b=2\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+    )
+    assertEquals(response.headers, headers)
+  }
   test("selects fixed chunked and HTTP10 close-delimited framing") {
     assertEquals(prepared(ResponseBody.Empty).framing, FixedLength(0))
     assertEquals(
