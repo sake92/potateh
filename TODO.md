@@ -1,8 +1,5 @@
 # Planned improvements
 
-- [ ] Close RFC audit gaps with shared JVM/Native regression tests:
-  - Accept a bounded number of empty list elements in `Transfer-Encoding` and
-    `Expect`, preserving framing-conflict checks (RFC 9110 section 5.6.1.2).
 - [ ] Review interoperability policies: higher HTTP/1 minor versions, a leading
   CRLF, and ignoring unselected HTTP/1.1 upgrade offers (RFC 9110 sections 2.5
   and 7.8; RFC 9112 section 2.2).

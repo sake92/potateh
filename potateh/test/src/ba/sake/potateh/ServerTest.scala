@@ -488,6 +488,42 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("handles empty expectation list elements") {
+    val calls = new AtomicInteger
+    withServer() { request =>
+      calls.incrementAndGet()
+      val out = new ByteArrayOutputStream
+      request.body.transferTo(out)
+      response(new String(out.toByteArray, ISO_8859_1))
+    } { server =>
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\nExpect: ,\r\nExpect: 100-continue,\r\n\r\n")
+        assertEquals(receive(socket).status, 100)
+        send(socket, "abc")
+        assertEquals(receive(socket).body, "abc")
+      }
+      withSocket(server) { socket =>
+        send(socket, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\nExpect: ,,,,,,,\r\n\r\nabc")
+        val actual = receive(socket)
+        assertEquals(actual.status, 200)
+        assertEquals(actual.body, "abc")
+      }
+      for (value <- List(",,,,,,,,,100-continue", ",100-continue,,fancy")) {
+        withSocket(server) { socket =>
+          send(socket, "POST / HTTP/1.1\r\nHost: x\r\nExpect: " + value + "\r\nContent-Length: 0\r\n\r\n")
+          assertEquals(receive(socket).status, 417)
+        }
+      }
+      withSocket(server) { socket =>
+        send(
+          socket,
+          "POST / HTTP/1.1\r\nHost: x\r\nExpect: ,,,,\r\nExpect: ,,,,100-continue\r\nContent-Length: 0\r\n\r\n"
+        )
+        assertEquals(receive(socket).status, 417)
+      }
+      assertEquals(calls.get(), 2)
+    }
+  }
   test("HTTP/1.0 ignores 100-continue and upgrade while reading the body") {
     val calls = new AtomicInteger
     withServer() { request =>

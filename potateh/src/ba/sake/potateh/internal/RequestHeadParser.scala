@@ -6,7 +6,7 @@ import java.net.{URI, URISyntaxException}
 import scala.util.boundary
 
 import boundary.break
-import HttpSyntax.{isToken, trimOws}
+import HttpSyntax.isToken
 
 /** Strict HTTP/1.x head parsing. The caller owns and reuses the input stream. After a parse failure the connection must
   * be closed, not parsed again.
@@ -138,8 +138,8 @@ private[potateh] object RequestHeadParser {
     }
     if (encodings.nonEmpty) {
       if (version == "HTTP/1.0") fail(400, "Transfer-Encoding on HTTP/1.0")
-      val codings = encodings.flatMap(_.split(",", -1)).map(trimOws)
-      if (codings.exists(c => c.isEmpty || !c.forall(isToken))) {
+      val codings = HttpSyntax.listElements(encodings).getOrElse(fail(400, "Too many empty transfer codings"))
+      if (codings.isEmpty || codings.exists(c => !c.forall(isToken))) {
         fail(400, "Invalid transfer coding")
       }
       if (

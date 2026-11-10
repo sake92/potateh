@@ -184,8 +184,6 @@ class RequestHeadParserTest extends munit.FunSuite {
       "gzip",
       "chunked, gzip",
       "chunked, chunked",
-      ",chunked",
-      "chunked,",
       "chunked;foo=bar"
     ).foreach { value =>
       rejected(request("Transfer-Encoding: " + value + "\r\n"), 400)
@@ -204,6 +202,22 @@ class RequestHeadParserTest extends munit.FunSuite {
       400
     )
     rejected("POST / HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n", 400)
+  }
+
+  test("acceptsBoundedEmptyTransferCodingElements") {
+    for (value <- List(",chunked", "chunked,", ", ,chunked, ,", ",,,,,,,,chunked")) {
+      assertEquals(parse(request("Transfer-Encoding: " + value + "\r\n")).framing, Chunked)
+    }
+    assertEquals(
+      parse(request("Transfer-Encoding: ,\r\nTransfer-Encoding: chunked,\r\n")).framing,
+      Chunked
+    )
+    rejected(request("Transfer-Encoding: ,,,,,,,,,chunked\r\n"), 400)
+    rejected(request("Transfer-Encoding: ,,,,\r\nTransfer-Encoding: ,,,,chunked\r\n"), 400)
+    rejected(request("Transfer-Encoding: , ,\r\n"), 400)
+    rejected(request("Content-Length: 0\r\nTransfer-Encoding: ,\r\n"), 400)
+    rejected(request("Transfer-Encoding: chunked,,chunked\r\n"), 400)
+    rejected(request("Transfer-Encoding: chunked,,gzip\r\n"), 400)
   }
 
   test("enforcesLimitsAtBoundaries") {

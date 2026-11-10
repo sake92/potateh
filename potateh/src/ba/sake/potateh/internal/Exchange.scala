@@ -24,6 +24,7 @@ private[potateh] final class Exchange(
   private var failure: Option[IOException] = None
   private var live = true
   private var continued = false
+  private var expectContinue = false
   private val headers = Headers.from(head.headers)
   private val limits = config.limits
   private val framed: InputStream = head.framing match {
@@ -92,11 +93,7 @@ private[potateh] final class Exchange(
     private def consume[A](operation: => A): A = {
       check()
       guard {
-        if (
-          head.version == "HTTP/1.1" && !complete && !continued && headers
-            .all("Expect")
-            .nonEmpty && !committed
-        ) {
+        if (head.version == "HTTP/1.1" && !complete && !continued && expectContinue && !committed) {
           output.write("HTTP/1.1 100 Continue\r\n\r\n".getBytes(US_ASCII))
           output.flush()
           continued = true
@@ -137,13 +134,15 @@ private[potateh] final class Exchange(
         reject(501)
         break(false)
       }
-      val expectations = {
-        headers.all("Expect").flatMap(_.split(",", -1)).map(HttpSyntax.trimOws)
+      val expectations = HttpSyntax.listElements(headers.all("Expect")).getOrElse {
+        reject(417)
+        break(false)
       }
       if (expectations.exists(!_.equalsIgnoreCase("100-continue"))) {
         reject(417)
         break(false)
       }
+      expectContinue = expectations.nonEmpty
       val options = headers
         .all("Connection")
         .flatMap(_.split(",", -1))
