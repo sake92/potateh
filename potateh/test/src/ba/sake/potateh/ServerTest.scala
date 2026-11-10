@@ -63,11 +63,12 @@ class ServerTest extends munit.FunSuite {
     out.toString
   }
 
-  private case class Received(status: Int, headers: Headers, body: String)
+  private case class Received(version: String, status: Int, headers: Headers, body: String)
 
   private def receive(socket: Socket, headOnly: Boolean = false): Received = {
     val input = socket.getInputStream
-    val status = line(input).split(" ")(1).toInt
+    val statusLine = line(input).split(" ")
+    val status = statusLine(1).toInt
     val fields = Vector.newBuilder[(name: String, value: String)]
     var field = line(input)
     while (field.nonEmpty) {
@@ -103,7 +104,7 @@ class ServerTest extends munit.FunSuite {
         }
       }
     }
-    Received(status, headers, new String(out.toByteArray, ISO_8859_1))
+    Received(statusLine(0), status, headers, new String(out.toByteArray, ISO_8859_1))
   }
 
   private def get(
@@ -661,8 +662,29 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("handles higher minor versions, leading CRLF and upgrade offers") {
+    withServer()(request => response(request.version.toString)) { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          "\r\n" + get(version = "HTTP/1.2", fields = "Upgrade: websocket\r\nConnection: upgrade\r\n") +
+            "\r\n" + get(version = "HTTP/1.9", fields = "Connection: close\r\n")
+        )
+        val first = receive(socket)
+        assertEquals(first.version, "HTTP/1.1")
+        assertEquals(first.status, 200)
+        assertEquals(first.body, HttpVersion.Http11.toString)
+        assertEquals(receive(socket).body, HttpVersion.Http11.toString)
+        closed(socket)
+      }
+      withSocket(server) { socket =>
+        send(socket, get(fields = "Connection: upgrade\r\n"))
+        assertEquals(receive(socket).status, 200)
+      }
+    }
+  }
   test(
-    "malformed heads, upgrades and tunnels are rejected and server recovers"
+    "malformed heads and tunnels are rejected and server recovers"
   ) {
     withServer()(_ => response("ok")) { server =>
       for (
@@ -670,7 +692,6 @@ class ServerTest extends munit.FunSuite {
           "GET / HTTP/1.1\r\n\r\n" -> 400,
           get(fields = "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n") -> 400,
           "GET / HTTP/1.1\nHost: x\r\n\r\n" -> 400,
-          get(fields = "Upgrade: websocket\r\nConnection: upgrade\r\n") -> 501,
           "CONNECT example.org:443 HTTP/1.1\r\nHost: x\r\n\r\n" -> 501
         )
       ) {

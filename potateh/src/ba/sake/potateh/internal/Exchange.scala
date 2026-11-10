@@ -130,7 +130,7 @@ private[potateh] final class Exchange(
           break(false)
         case _ => ()
       }
-      if (head.method == "CONNECT" || (head.version == "HTTP/1.1" && headers.first("Upgrade").nonEmpty)) {
+      if (head.method == "CONNECT") {
         reject(501)
         break(false)
       }
@@ -150,10 +150,6 @@ private[potateh] final class Exchange(
         .filter(_.nonEmpty)
       if (!options.forall(_.forall(HttpSyntax.isToken))) {
         reject(400)
-        break(false)
-      }
-      if (head.version == "HTTP/1.1" && options.exists(_.equalsIgnoreCase("upgrade"))) {
-        reject(501)
         break(false)
       }
       val persistent = !options.exists(_.equalsIgnoreCase("close")) &&

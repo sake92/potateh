@@ -103,6 +103,16 @@ class RequestHeadParserTest extends munit.FunSuite {
     rejected("GET / HTTP/2.0\r\n\r\n", 505)
   }
 
+  test("acceptsOneLeadingCrlfAndHigherHttp1MinorVersions") {
+    for (minor <- 2 to 9) {
+      val head = parse(s"\r\nGET / HTTP/1.$minor\r\nHost: x\r\n\r\n")
+      assertEquals(head.version, "HTTP/1.1")
+    }
+    rejected("\r\n\r\nGET / HTTP/1.1\r\nHost: x\r\n\r\n", 400)
+    rejected("\rXGET / HTTP/1.1\r\nHost: x\r\n\r\n", 400)
+    rejected("GET / HTTP/1.2\r\n\r\n", 400)
+  }
+
   test("rejectsMalformedHeadersAndHost") {
     List(
       "",

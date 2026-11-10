@@ -50,8 +50,12 @@ private[potateh] object RequestHeadParser {
       input: InputStream,
       limits: Limits = Limits()
   ): Option[RequestHead] = boundary {
-    val first = input.read()
+    var first = input.read()
     if (first == -1) break(None)
+    if (first == '\r') {
+      if (input.read() != '\n') fail(400, "CR must be followed by LF")
+      first = input.read()
+    }
     val line = {
       readLine(input, first, limits.maxRequestLineBytes, 414, requestLine = true)
     }
@@ -62,14 +66,17 @@ private[potateh] object RequestHeadParser {
     }
     val method = line.substring(0, firstSpace)
     val target = line.substring(firstSpace + 1, lastSpace)
-    val version = line.substring(lastSpace + 1)
+    val suppliedVersion = line.substring(lastSpace + 1)
     if (!method.forall(isToken)) fail(400, "Invalid method")
-    if (!version.matches("HTTP/[0-9]\\.[0-9]")) {
+    if (
+      suppliedVersion.length != 8 || !suppliedVersion.startsWith("HTTP/") ||
+      suppliedVersion.charAt(5) < '0' || suppliedVersion.charAt(5) > '9' ||
+      suppliedVersion.charAt(6) != '.' || suppliedVersion.charAt(7) < '0' || suppliedVersion.charAt(7) > '9'
+    ) {
       fail(400, "Invalid HTTP version")
     }
-    if (version != "HTTP/1.0" && version != "HTTP/1.1") {
-      fail(505, "Unsupported HTTP version")
-    }
+    if (suppliedVersion.charAt(5) != '1') fail(505, "Unsupported HTTP version")
+    val version = if (suppliedVersion == "HTTP/1.0") "HTTP/1.0" else "HTTP/1.1"
     validateTarget(method, target)
 
     val fields = Vector.newBuilder[(name: String, value: String)]
