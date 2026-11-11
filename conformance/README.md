@@ -271,7 +271,7 @@ The idle-drip check accepts either EOF/reset or a fully validated bodyless 408
 followed by EOF. It records the 408 wire response; any premature success or
 other response fails.
 
-# Local baseline (2026-11-07)
+# Local baseline (2026-11-11)
 
 Linux x86_64, Temurin Java 21.0.10, Deder 0.22.2, Scala 3.9.0,
 Native 0.5.12 release-fast with multithreading:
@@ -289,10 +289,15 @@ Native 0.5.12 release-fast with multithreading:
 | Nmap `http-slowloris-check` (10-/15-second head deadlines) | 2 explicit negatives | 2 explicit negatives |
 | Proxy boundaries (13 cases × direct/Caddy/nginx buffered/nginx streaming) | 52/52 | 52/52 |
 
-These results were collected during development, before subsequent source
-changes; they are not a verification of every later revision. Http11Probe
-executed 196 tests per target, excluding 17 cookie/WebSocket cases. Its one
-failure is the empty-Host disagreement described above.
+These results cover library revision `f2771ee` on Linux. The fuzz run uses an
+updated unsupported-version case, and proxy runs use fixture logging that keeps
+error messages from interleaving with request observations. Before that logging
+change, three Native proxy runs reported incomplete observations when an error
+stack trace joined a request log line; the subsequent two runs passed. The
+original reports remain in ignored `conformance/out`.
+
+Http11Probe executed 196 tests per target, excluding 17 cookie/WebSocket cases.
+Its one failure is the empty-Host disagreement described above.
 
 ## Known limitations
 

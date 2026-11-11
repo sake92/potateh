@@ -336,7 +336,7 @@ object Fuzzing {
         val invalid = Vector(' ', '\t', '(', ')', '@', '\u0000')(random.nextInt(6))
         (head(s"Bad${invalid}Name: x\r\n"), Expected(400), true)
       case "invalid-target"           => ("GET /bad%zz HTTP/1.1\r\nHost: x\r\n\r\n", Expected(400), true)
-      case "unsupported-version"      => ("GET / HTTP/1.2\r\nHost: x\r\n\r\n", Expected(505), true)
+      case "unsupported-version"      => ("GET / HTTP/2.0\r\nHost: x\r\n\r\n", Expected(505), true)
       case "duplicate-chunked"        => (head("Transfer-Encoding: chunked, chunked\r\n"), Expected(400), true)
       case "chunked-not-last"         => (head("Transfer-Encoding: chunked, gzip\r\n"), Expected(400), true)
       case "unsupported-coding"       => (head("Transfer-Encoding: gzip, chunked\r\n"), Expected(501), true)

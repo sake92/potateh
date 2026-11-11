@@ -62,7 +62,11 @@ object ConformanceServer {
       } else if (profile == "nmap") {
         HttpTimeouts.Default.withRequestHeadTimeout(15.seconds).withShutdownGrace(200.millis)
       } else HttpTimeouts.Default.withShutdownGrace(200.millis))
-    val server = Server.start(settings) { request =>
+    val serverSettings = {
+      if (proxy) settings.withOnError(error => println("PROXY_ERROR\t" + error.toString))
+      else settings
+    }
+    val server = Server.start(serverSettings) { request =>
       if (proxy) {
         println(
           s"PROXY_HEAD\t${request.remoteAddress.getPort}\t${request.method}\t${hex(request.target.getBytes(UTF_8))}"
