@@ -21,6 +21,10 @@ private[potateh] final class BlockingServer(
 ) {
 
   private final class Connection(val socket: Socket) extends Runnable {
+    lazy val localAddress: InetSocketAddress =
+      socket.getLocalSocketAddress().asInstanceOf[InetSocketAddress]
+    lazy val remoteAddress: InetSocketAddress =
+      socket.getRemoteSocketAddress().asInstanceOf[InetSocketAddress]
     var active = {
       false // guarded by lifecycle, including idle/head -> exchange handover
     }
@@ -275,7 +279,16 @@ private[potateh] final class BlockingServer(
               }
               if (!admitted) break()
               try {
-                reuse = new Exchange(socket, input, output, value, config, handle).run()
+                reuse = new Exchange(
+                  socket,
+                  connection.localAddress,
+                  connection.remoteAddress,
+                  input,
+                  output,
+                  value,
+                  config,
+                  handle
+                ).run()
               } finally {
                 withLifecycle {
                   connection.active = false

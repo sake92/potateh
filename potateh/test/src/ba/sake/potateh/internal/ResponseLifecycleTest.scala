@@ -1,7 +1,7 @@
 package ba.sake.potateh.internal
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, IOException}
-import java.net.Socket
+import java.net.{InetSocketAddress, Socket}
 import java.nio.file.Files
 
 import scala.collection.mutable.ListBuffer
@@ -60,6 +60,8 @@ class ResponseLifecycleTest extends munit.FunSuite {
       )
       val exchange = new Exchange(
         socket,
+        new InetSocketAddress("127.0.0.1", 8080),
+        new InetSocketAddress("127.0.0.1", 54321),
         input,
         output,
         head,

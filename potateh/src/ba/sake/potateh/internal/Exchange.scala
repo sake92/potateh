@@ -1,7 +1,7 @@
 package ba.sake.potateh.internal
 
 import java.io.{IOException, InputStream, OutputStream}
-import java.net.{Socket, SocketTimeoutException}
+import java.net.{InetSocketAddress, Socket, SocketTimeoutException}
 import java.nio.charset.StandardCharsets.US_ASCII
 
 import scala.util.boundary
@@ -13,6 +13,8 @@ import ba.sake.potateh.*
 /** All mutable exchange state belongs to its connection worker. */
 private[potateh] final class Exchange(
     socket: Socket,
+    localAddress: InetSocketAddress,
+    remoteAddress: InetSocketAddress,
     input: InputStream,
     output: OutputStream,
     head: RequestHeadParser.RequestHead,
@@ -178,8 +180,8 @@ private[potateh] final class Exchange(
       version,
       headers,
       body,
-      socket.getLocalSocketAddress().asInstanceOf[java.net.InetSocketAddress],
-      socket.getRemoteSocketAddress().asInstanceOf[java.net.InetSocketAddress]
+      localAddress,
+      remoteAddress
     )
     activeRequest = Some(request)
     val response = handle(request)
