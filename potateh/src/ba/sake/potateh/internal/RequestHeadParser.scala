@@ -150,8 +150,8 @@ private[potateh] object RequestHeadParser {
         fail(400, "Invalid transfer coding")
       }
       if (
-        !codings.last.equalsIgnoreCase("chunked") ||
-        codings.count(_.equalsIgnoreCase("chunked")) != 1
+        !HttpSyntax.equalsIgnoreCaseAscii(codings.last, "chunked") ||
+        codings.count(coding => HttpSyntax.equalsIgnoreCaseAscii(coding, "chunked")) != 1
       ) {
         fail(400, "Chunked must occur exactly once, last")
       }
@@ -178,7 +178,9 @@ private[potateh] object RequestHeadParser {
       headers: Vector[(name: String, value: String)],
       name: String
   ): Vector[String] = {
-    headers.collect { case (key, value) if key.equalsIgnoreCase(name) => value }
+    headers.collect {
+      case (key, value) if HttpSyntax.equalsIgnoreCaseAscii(key, name) => value
+    }
   }
 
   private def fail(code: Int, message: String): Nothing = {

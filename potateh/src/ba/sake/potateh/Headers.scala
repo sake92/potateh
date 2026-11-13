@@ -12,11 +12,11 @@ final class Headers private (val fields: Vector[(name: String, value: String)]) 
   override def toString: String = s"Headers($fields)"
 
   def first(name: String): Option[String] = fields.collectFirst {
-    case (key, value) if key.equalsIgnoreCase(name) => value
+    case (key, value) if internal.HttpSyntax.equalsIgnoreCaseAscii(key, name) => value
   }
 
   def all(name: String): Vector[String] = fields.collect {
-    case (key, value) if key.equalsIgnoreCase(name) => value
+    case (key, value) if internal.HttpSyntax.equalsIgnoreCaseAscii(key, name) => value
   }
 
   def add(name: String, value: String): Headers = {
@@ -27,7 +27,7 @@ final class Headers private (val fields: Vector[(name: String, value: String)]) 
   def set(name: String, value: String): Headers = remove(name).add(name, value)
 
   def remove(name: String): Headers = {
-    new Headers(fields.filterNot(_.name.equalsIgnoreCase(name)))
+    new Headers(fields.filterNot(field => internal.HttpSyntax.equalsIgnoreCaseAscii(field.name, name)))
   }
 
 }

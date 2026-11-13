@@ -83,4 +83,22 @@ private[potateh] object HttpSyntax {
     valid
   }
 
+  def equalsIgnoreCaseAscii(left: String, right: String): Boolean = {
+    if (left eq right) true
+    else if (left.length != right.length) false
+    else {
+      var index = 0
+      var equal = true
+      while (index < left.length && equal) {
+        equal = asciiLower(left.charAt(index)) == asciiLower(right.charAt(index))
+        index += 1
+      }
+      equal
+    }
+  }
+
+  private inline def asciiLower(value: Char): Char = {
+    if (value >= 'A' && value <= 'Z') (value + ('a' - 'A')).toChar else value
+  }
+
 }

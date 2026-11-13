@@ -153,7 +153,7 @@ private[potateh] final class Exchange(
       reject(417)
       break(false)
     }
-    if (expectations.exists(!_.equalsIgnoreCase("100-continue"))) {
+    if (expectations.exists(value => !HttpSyntax.equalsIgnoreCaseAscii(value, "100-continue"))) {
       reject(417)
       break(false)
     }
@@ -166,10 +166,8 @@ private[potateh] final class Exchange(
       reject(400)
       break(false)
     }
-    val persistent = !options.exists(_.equalsIgnoreCase("close")) &&
-      (head.version == "HTTP/1.1" || options.exists(
-        _.equalsIgnoreCase("keep-alive")
-      ))
+    val persistent = !options.exists(value => HttpSyntax.equalsIgnoreCaseAscii(value, "close")) &&
+      (head.version == "HTTP/1.1" || options.exists(value => HttpSyntax.equalsIgnoreCaseAscii(value, "keep-alive")))
     val version = {
       if (head.version == "HTTP/1.1") HttpVersion.Http11
       else HttpVersion.Http10

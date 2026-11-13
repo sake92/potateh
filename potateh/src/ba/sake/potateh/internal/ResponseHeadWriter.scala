@@ -59,9 +59,9 @@ private[potateh] object ResponseHeadWriter {
       "Tunnels are unsupported"
     )
     response.headers.fields.foreach { case (key, _) =>
-      val managed = managedHeaders.exists(name => name.length == key.length && name.equalsIgnoreCase(key))
+      val managed = managedHeaders.exists(name => HttpSyntax.equalsIgnoreCaseAscii(name, key))
       require(
-        !managed || (status == 426 && key.equalsIgnoreCase("Upgrade")),
+        !managed || (status == 426 && HttpSyntax.equalsIgnoreCaseAscii(key, "Upgrade")),
         "Engine owns framing and connection headers"
       )
     }
@@ -95,7 +95,9 @@ private[potateh] object ResponseHeadWriter {
       }
     }
     val closes = close || framing == CloseDelimited
-    val hasDate = response.headers.fields.exists { case (name, _) => name.equalsIgnoreCase("Date") }
+    val hasDate = response.headers.fields.exists { case (name, _) =>
+      HttpSyntax.equalsIgnoreCaseAscii(name, "Date")
+    }
     val head = new HeadBytes()
     head.appendAscii(version)
     head.append(' ')
