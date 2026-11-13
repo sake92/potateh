@@ -11,7 +11,9 @@ private[potateh] object HttpSyntax {
   def listElements(values: Vector[String]): Option[Vector[String]] = boundary {
     val elements = Vector.newBuilder[String]
     var empty = 0
-    values.foreach { value =>
+    val iterator = values.iterator
+    while (iterator.hasNext) {
+      val value = iterator.next()
       var start = 0
       var end = value.indexOf(',')
       while (end >= 0) {

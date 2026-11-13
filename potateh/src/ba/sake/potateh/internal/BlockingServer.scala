@@ -214,95 +214,97 @@ private[potateh] final class BlockingServer(
     }
   }
 
-  private def serve(connection: Connection): Unit = boundary {
+  private def serve(connection: Connection): Unit = {
     val socket = connection.socket
     try {
-      socket.setTcpNoDelay(true)
-      val input = new PushbackInputStream(
-        new BufferedInputStream(socket.getInputStream()),
-        1
-      )
-      val socketOutput = writes match {
-        case Some(watcher) => watcher.output(socket)
-        case None          => socket.getOutputStream()
-      }
-      val output = new BufferedOutputStream(socketOutput)
-      var first = true
-      var reuse = true
-      while (reuse && running) {
-        val headStart = System.nanoTime()
-        socket.setSoTimeout(millis(config.timeouts.idleTimeout.toNanos).toInt)
-        // Initial silent sockets are bounded by the absolute head deadline.
-        if (first) {
-          socket.setSoTimeout(millis(config.timeouts.requestHeadTimeout.toNanos).toInt)
+      boundary {
+        socket.setTcpNoDelay(true)
+        val input = new PushbackInputStream(
+          new BufferedInputStream(socket.getInputStream()),
+          1
+        )
+        val socketOutput = writes match {
+          case Some(watcher) => watcher.output(socket)
+          case None          => socket.getOutputStream()
         }
-        val next = input.read()
-        if (next == -1) break()
-        input.unread(next)
-        val deadline = {
-          if (first) headStart + config.timeouts.requestHeadTimeout.toNanos
-          else System.nanoTime() + config.timeouts.requestHeadTimeout.toNanos
-        }
-        first = false
-        val headInput = new InputStream {
-          private var readTimeoutMillis = 0
-
-          override def read(): Int = {
-            val remaining = deadline - System.nanoTime()
-            if (remaining <= 0) {
-              throw new SocketTimeoutException("Request head deadline exceeded")
-            }
-            val timeoutMillis = millis(remaining).toInt
-            // Native sets SO_RCVTIMEO on every call, even when the value is unchanged.
-            if (timeoutMillis != readTimeoutMillis) {
-              socket.setSoTimeout(timeoutMillis)
-              readTimeoutMillis = timeoutMillis
-            }
-            val byte = input.read()
-            if (deadline - System.nanoTime() <= 0) {
-              throw new SocketTimeoutException("Request head deadline exceeded")
-            }
-            byte
+        val output = new BufferedOutputStream(socketOutput)
+        var first = true
+        var reuse = true
+        while (reuse && running) {
+          val headStart = System.nanoTime()
+          socket.setSoTimeout(millis(config.timeouts.idleTimeout.toNanos).toInt)
+          // Initial silent sockets are bounded by the absolute head deadline.
+          if (first) {
+            socket.setSoTimeout(millis(config.timeouts.requestHeadTimeout.toNanos).toInt)
           }
-        }
-        val limits = config.limits
-        val head = try {
-          RequestHeadParser.read(
-            headInput,
-            RequestHeadParser.Limits(
-              limits.maxRequestLineBytes,
-              limits.maxHeaderLineBytes,
-              limits.maxHeaderSectionBytes,
-              limits.maxHeaderCount
+          val next = input.read()
+          if (next == -1) break()
+          input.unread(next)
+          val deadline = {
+            if (first) headStart + config.timeouts.requestHeadTimeout.toNanos
+            else System.nanoTime() + config.timeouts.requestHeadTimeout.toNanos
+          }
+          first = false
+          val headInput = new InputStream {
+            private var readTimeoutMillis = 0
+
+            override def read(): Int = {
+              val remaining = deadline - System.nanoTime()
+              if (remaining <= 0) {
+                throw new SocketTimeoutException("Request head deadline exceeded")
+              }
+              val timeoutMillis = millis(remaining).toInt
+              // Native sets SO_RCVTIMEO on every call, even when the value is unchanged.
+              if (timeoutMillis != readTimeoutMillis) {
+                socket.setSoTimeout(timeoutMillis)
+                readTimeoutMillis = timeoutMillis
+              }
+              val byte = input.read()
+              if (deadline - System.nanoTime() <= 0) {
+                throw new SocketTimeoutException("Request head deadline exceeded")
+              }
+              byte
+            }
+          }
+          val limits = config.limits
+          val head = try {
+            RequestHeadParser.read(
+              headInput,
+              RequestHeadParser.Limits(
+                limits.maxRequestLineBytes,
+                limits.maxHeaderLineBytes,
+                limits.maxHeaderSectionBytes,
+                limits.maxHeaderCount
+              )
             )
-          )
-        } catch {
-          case error: RequestHeadParser.ParseException =>
-            reject(socket, output, error.responseCode)
-            break()
-          case _: SocketTimeoutException =>
-            reject(socket, output, 408)
-            break()
-        }
-        head match {
-          case None        => break()
-          case Some(value) =>
-            val admitted = withLifecycle {
-              if (state != State.Running) false
-              else {
-                connection.active = true
-                true
+          } catch {
+            case error: RequestHeadParser.ParseException =>
+              reject(socket, output, error.responseCode)
+              break()
+            case _: SocketTimeoutException =>
+              reject(socket, output, 408)
+              break()
+          }
+          head match {
+            case None        => break()
+            case Some(value) =>
+              val admitted = withLifecycle {
+                if (state != State.Running) false
+                else {
+                  connection.active = true
+                  true
+                }
               }
-            }
-            if (!admitted) break()
-            try {
-              reuse = new Exchange(socket, input, output, value, config, handle).run()
-            } finally {
-              withLifecycle {
-                connection.active = false
-                lifecycleChanged.signalAll()
+              if (!admitted) break()
+              try {
+                reuse = new Exchange(socket, input, output, value, config, handle).run()
+              } finally {
+                withLifecycle {
+                  connection.active = false
+                  lifecycleChanged.signalAll()
+                }
               }
-            }
+          }
         }
       }
     } catch { case NonFatal(_) => () }

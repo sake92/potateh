@@ -3,6 +3,7 @@
 ## Scala conventions
 
 - Avoid `return`; use expressions or `scala.util.boundary` and `boundary.break` for early exits.
+- In hot paths, avoid `break` across `try` blocks or nested functions: it can throw and unwind on Scala Native. Never let a broad catch intercept a `break`.
 - Use named tuples for tuple data with meaningful fields, and access fields by name.
 - Follow `.scalafmt.conf` for formatting and syntax rewrites.
 

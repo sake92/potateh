@@ -122,69 +122,9 @@ private[potateh] final class Exchange(
     }
   }
 
-  def run(): Boolean = boundary {
-    try {
-      head.framing match {
-        case RequestHeadParser.FixedLength(size) if limits.maxBodyBytes.exists(size > _) =>
-          reject(413)
-          break(false)
-        case _ => ()
-      }
-      if (head.method == "CONNECT") {
-        reject(501)
-        break(false)
-      }
-      val expectations = HttpSyntax.listElements(headers.all("Expect")).getOrElse {
-        reject(417)
-        break(false)
-      }
-      if (expectations.exists(!_.equalsIgnoreCase("100-continue"))) {
-        reject(417)
-        break(false)
-      }
-      expectContinue = expectations.nonEmpty
-      val options = HttpSyntax.listElements(headers.all("Connection")).getOrElse {
-        reject(400)
-        break(false)
-      }
-      if (!options.forall(_.forall(HttpSyntax.isToken))) {
-        reject(400)
-        break(false)
-      }
-      val persistent = !options.exists(_.equalsIgnoreCase("close")) &&
-        (head.version == "HTTP/1.1" || options.exists(
-          _.equalsIgnoreCase("keep-alive")
-        ))
-      val version = {
-        if (head.version == "HTTP/1.1") HttpVersion.Http11
-        else HttpVersion.Http10
-      }
-      val request = Request(
-        head.method,
-        head.target,
-        version,
-        headers,
-        body,
-        socket.getLocalSocketAddress().asInstanceOf[java.net.InetSocketAddress],
-        socket.getRemoteSocketAddress().asInstanceOf[java.net.InetSocketAddress]
-      )
-      activeRequest = Some(request)
-      val response = handle(request)
-      failure.foreach(throw _)
-      // A writer may consume the body, but headers must commit to closure before it runs.
-      val prepared = ResponseHeadWriter.prepare(
-        head.method,
-        head.version,
-        response,
-        !persistent || !complete
-      )
-      committed = true
-      output.write(prepared.bytes)
-      ResponseHeadWriter.writeBody(output, response.body, prepared.framing)
-      failure.foreach(throw _)
-      output.flush()
-      persistent && !prepared.closes && complete
-    } catch {
+  def run(): Boolean = {
+    try process()
+    catch {
       case NonFatal(error) =>
         try config.onError(error)
         catch { case NonFatal(_) => () }
@@ -196,6 +136,69 @@ private[potateh] final class Exchange(
       try body.close()
       finally activeRequest.foreach(_.completeResponse(config.onError))
     }
+  }
+
+  private def process(): Boolean = boundary {
+    head.framing match {
+      case RequestHeadParser.FixedLength(size) if limits.maxBodyBytes.exists(size > _) =>
+        reject(413)
+        break(false)
+      case _ => ()
+    }
+    if (head.method == "CONNECT") {
+      reject(501)
+      break(false)
+    }
+    val expectations = HttpSyntax.listElements(headers.all("Expect")).getOrElse {
+      reject(417)
+      break(false)
+    }
+    if (expectations.exists(!_.equalsIgnoreCase("100-continue"))) {
+      reject(417)
+      break(false)
+    }
+    expectContinue = expectations.nonEmpty
+    val options = HttpSyntax.listElements(headers.all("Connection")).getOrElse {
+      reject(400)
+      break(false)
+    }
+    if (!options.forall(_.forall(HttpSyntax.isToken))) {
+      reject(400)
+      break(false)
+    }
+    val persistent = !options.exists(_.equalsIgnoreCase("close")) &&
+      (head.version == "HTTP/1.1" || options.exists(
+        _.equalsIgnoreCase("keep-alive")
+      ))
+    val version = {
+      if (head.version == "HTTP/1.1") HttpVersion.Http11
+      else HttpVersion.Http10
+    }
+    val request = Request(
+      head.method,
+      head.target,
+      version,
+      headers,
+      body,
+      socket.getLocalSocketAddress().asInstanceOf[java.net.InetSocketAddress],
+      socket.getRemoteSocketAddress().asInstanceOf[java.net.InetSocketAddress]
+    )
+    activeRequest = Some(request)
+    val response = handle(request)
+    failure.foreach(throw _)
+    // A writer may consume the body, but headers must commit to closure before it runs.
+    val prepared = ResponseHeadWriter.prepare(
+      head.method,
+      head.version,
+      response,
+      !persistent || !complete
+    )
+    committed = true
+    output.write(prepared.bytes)
+    ResponseHeadWriter.writeBody(output, response.body, prepared.framing)
+    failure.foreach(throw _)
+    output.flush()
+    persistent && !prepared.closes && complete
   }
 
   private def reject(code: Int): Unit = {

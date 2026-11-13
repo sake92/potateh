@@ -588,6 +588,28 @@ class ServerTest extends munit.FunSuite {
       assertEquals(calls.get(), 4)
     }
   }
+  test("protocol rejections do not report internal errors") {
+    val errors = new AtomicInteger
+    val settings = {
+      config.withLimits(HttpLimits.Default.withMaxBodyBytes(Some(3))).withOnError(_ => errors.incrementAndGet())
+    }
+    withServer(settings)(_ => response("unexpected")) { server =>
+      for (
+        (wire, status) <- List(
+          "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\n\r\n" -> 413,
+          "POST / HTTP/1.1\r\nHost: x\r\nExpect: fancy\r\n\r\n" -> 417,
+          "CONNECT example.org:443 HTTP/1.1\r\nHost: x\r\n\r\n" -> 501
+        )
+      ) {
+        withSocket(server) { socket =>
+          send(socket, wire)
+          assertEquals(receive(socket).status, status)
+          closed(socket)
+        }
+      }
+      assertEquals(errors.get(), 0)
+    }
+  }
   test(
     "oversized declared bodies and unsupported expectations skip dispatch and continuation"
   ) {

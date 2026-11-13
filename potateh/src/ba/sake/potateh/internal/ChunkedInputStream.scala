@@ -54,31 +54,37 @@ private[potateh] final class ChunkedInputStream(
 
   def isComplete: Boolean = complete && failure.isEmpty
 
-  override def read(): Int = boundary {
+  override def read(): Int = {
     checkReadable()
     try {
-      if (!prepareChunk()) break(-1)
-      val next = readByte()
-      remaining -= 1
-      next
+      if (!prepareChunk()) -1
+      else {
+        val next = readByte()
+        remaining -= 1
+        next
+      }
     } catch { case error: IOException => fail(error) }
   }
 
-  override def read(buffer: Array[Byte], offset: Int, length: Int): Int = boundary {
+  override def read(buffer: Array[Byte], offset: Int, length: Int): Int = {
     if (buffer == null) throw new NullPointerException("buffer")
     if (offset < 0 || length < 0 || offset > buffer.length || length > buffer.length - offset) {
       throw new IndexOutOfBoundsException()
     }
     checkReadable()
-    if (length == 0) break(0)
-    try {
-      if (!prepareChunk()) break(-1)
-      val maximum = math.min(remaining, length.toLong).toInt
-      val count = input.read(buffer, offset, maximum)
-      if (count == -1) throw new EOFException("Truncated chunk data")
-      remaining -= count
-      count
-    } catch { case error: IOException => fail(error) }
+    if (length == 0) 0
+    else {
+      try {
+        if (!prepareChunk()) -1
+        else {
+          val maximum = math.min(remaining, length.toLong).toInt
+          val count = input.read(buffer, offset, maximum)
+          if (count == -1) throw new EOFException("Truncated chunk data")
+          remaining -= count
+          count
+        }
+      } catch { case error: IOException => fail(error) }
+    }
   }
 
   override def skip(count: Long): Long = boundary {
