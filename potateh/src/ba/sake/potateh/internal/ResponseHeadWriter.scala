@@ -18,15 +18,6 @@ private[potateh] object ResponseHeadWriter {
 
   import Framing.*
 
-  private val managedHeaders = Set(
-    "content-length",
-    "transfer-encoding",
-    "connection",
-    "keep-alive",
-    "upgrade",
-    "trailer"
-  )
-
   final case class Prepared(
       bytes: Array[Byte],
       framing: Framing,
@@ -58,12 +49,14 @@ private[potateh] object ResponseHeadWriter {
       method != "CONNECT" || status < 200 || status >= 300,
       "Tunnels are unsupported"
     )
+    var hasDate = false
     response.headers.fields.foreach { case (key, _) =>
-      val managed = managedHeaders.exists(name => HttpSyntax.equalsIgnoreCaseAscii(name, key))
+      val managed = isEngineManagedHeader(key)
       require(
-        !managed || (status == 426 && HttpSyntax.equalsIgnoreCaseAscii(key, "Upgrade")),
+        !managed || (status == 426 && key.length == 7 && HttpSyntax.equalsIgnoreCaseAscii(key, "Upgrade")),
         "Engine owns framing and connection headers"
       )
+      if (!hasDate && key.length == 4 && HttpSyntax.equalsIgnoreCaseAscii(key, "Date")) hasDate = true
     }
     if (status == 426) {
       val protocols = HttpSyntax.listElements(response.headers.all("Upgrade")).getOrElse(Vector.empty)
@@ -95,9 +88,6 @@ private[potateh] object ResponseHeadWriter {
       }
     }
     val closes = close || framing == CloseDelimited
-    val hasDate = response.headers.fields.exists { case (name, _) =>
-      HttpSyntax.equalsIgnoreCaseAscii(name, "Date")
-    }
     val head = new HeadBytes()
     head.appendAscii(version)
     head.append(' ')
@@ -294,6 +284,15 @@ private[potateh] object ResponseHeadWriter {
   }
 
   private def daysInYear(year: Int): Int = if (isLeapYear(year)) 366 else 365
+
+  private def isEngineManagedHeader(value: String): Boolean = value.length match {
+    case 7  => HttpSyntax.equalsIgnoreCaseAscii(value, "Upgrade") || HttpSyntax.equalsIgnoreCaseAscii(value, "Trailer")
+    case 10 =>
+      HttpSyntax.equalsIgnoreCaseAscii(value, "Connection") || HttpSyntax.equalsIgnoreCaseAscii(value, "Keep-Alive")
+    case 14 => HttpSyntax.equalsIgnoreCaseAscii(value, "Content-Length")
+    case 17 => HttpSyntax.equalsIgnoreCaseAscii(value, "Transfer-Encoding")
+    case _  => false
+  }
 
   private def twoDigits(value: Int): String = {
     if (value < 10) "0" + value else value.toString
