@@ -1,7 +1,6 @@
 package ba.sake.potateh.internal
 
 import java.io.OutputStream
-import java.nio.charset.StandardCharsets.ISO_8859_1
 
 import scala.util.boundary
 
@@ -33,6 +32,9 @@ private[potateh] object ResponseHeadWriter {
       framing: Framing,
       closes: Boolean
   )
+
+  @volatile private var cachedDateSecond = Long.MinValue
+  @volatile private var cachedDate = ""
 
   def length(body: ResponseBody): Option[Long] = body match {
     case ResponseBody.Empty          => Some(0L)
@@ -93,40 +95,47 @@ private[potateh] object ResponseHeadWriter {
       }
     }
     val closes = close || framing == CloseDelimited
-    val headers = Vector.newBuilder[(name: String, value: String)]
-    headers ++= response.headers.fields
-    if (response.headers.first("Date").isEmpty) {
-      headers += ((name = "Date", value = httpDate(System.currentTimeMillis())))
+    val hasDate = response.headers.fields.exists { case (name, _) => name.equalsIgnoreCase("Date") }
+    val head = new HeadBytes()
+    head.appendAscii(version)
+    head.append(' ')
+    head.appendAscii(status.toString)
+    head.append(' ')
+    head.appendAscii(reason(status))
+    head.appendAscii("\r\n")
+    response.headers.fields.foreach { case (name, value) =>
+      head.appendHttp(name)
+      head.appendAscii(": ")
+      head.appendHttp(value)
+      head.appendAscii("\r\n")
+    }
+    if (!hasDate) {
+      head.appendAscii("Date: ")
+      head.appendAscii(currentHttpDate())
+      head.appendAscii("\r\n")
     }
     if (!forbidden) {
-      if (status == 205) headers += ((name = "Content-Length", value = "0"))
+      if (status == 205) head.appendAscii("Content-Length: 0\r\n")
       else {
-        size.foreach(value => headers += ((name = "Content-Length", value = value.toString)))
+        size.foreach { value =>
+          head.appendAscii("Content-Length: ")
+          head.appendAscii(value.toString)
+          head.appendAscii("\r\n")
+        }
       }
     }
     if (framing == Chunked) {
-      headers += ((name = "Transfer-Encoding", value = "chunked"))
+      head.appendAscii("Transfer-Encoding: chunked\r\n")
     }
-    if (closes && status == 426) headers += ((name = "Connection", value = "close, upgrade"))
-    else if (status == 426 && version == "HTTP/1.0") headers += ((name = "Connection", value = "keep-alive, upgrade"))
-    else if (status == 426) headers += ((name = "Connection", value = "upgrade"))
-    else if (closes) headers += ((name = "Connection", value = "close"))
+    if (closes && status == 426) head.appendAscii("Connection: close, upgrade\r\n")
+    else if (status == 426 && version == "HTTP/1.0") head.appendAscii("Connection: keep-alive, upgrade\r\n")
+    else if (status == 426) head.appendAscii("Connection: upgrade\r\n")
+    else if (closes) head.appendAscii("Connection: close\r\n")
     else if (version == "HTTP/1.0") {
-      headers += ((name = "Connection", value = "keep-alive"))
+      head.appendAscii("Connection: keep-alive\r\n")
     }
-    val head = new StringBuilder
-    head
-      .append(version)
-      .append(' ')
-      .append(status)
-      .append(' ')
-      .append(reason(status))
-      .append("\r\n")
-    headers.result().foreach { case (name, value) =>
-      head.append(name).append(": ").append(value).append("\r\n")
-    }
-    head.append("\r\n")
-    Prepared(head.toString.getBytes(ISO_8859_1), framing, closes)
+    head.appendAscii("\r\n")
+    Prepared(head.result(), framing, closes)
   }
 
   def writeBody(
@@ -135,6 +144,17 @@ private[potateh] object ResponseHeadWriter {
       framing: Framing
   ): Unit = boundary {
     if (framing == NoBody) break()
+    body match {
+      case ResponseBody.Empty        => break()
+      case bytes: ResponseBody.Bytes =>
+        framing match {
+          case FixedLength(size) if size == bytes.value.length =>
+            output.write(bytes.value)
+            break()
+          case _ => ()
+        }
+      case _: ResponseBody.Writer => ()
+    }
     val stream = framing match {
       case FixedLength(size) => new FixedLengthOutputStream(output, size)
       case Chunked           => new ChunkedOutputStream(output)
@@ -199,6 +219,19 @@ private[potateh] object ResponseHeadWriter {
       }
       stream.close()
     } finally live = false
+  }
+
+  private def currentHttpDate(): String = {
+    val now = System.currentTimeMillis()
+    val second = Math.floorDiv(now, 1000L)
+    val cached = cachedDate
+    if (cachedDateSecond == second && cached.nonEmpty) cached
+    else {
+      val formatted = httpDate(now)
+      cachedDate = formatted
+      cachedDateSecond = second
+      formatted
+    }
   }
 
   // Native 0.5.12 has no java.text date formatter. Bound the conversion to the
@@ -294,6 +327,50 @@ private[potateh] object ResponseHeadWriter {
     case 503 => "Service Unavailable"
     case 505 => "HTTP Version Not Supported"
     case _   => ""
+  }
+
+  private final class HeadBytes {
+    private var bytes = new Array[Byte](256)
+    private var length = 0
+
+    def append(value: Char): Unit = {
+      val byte = if (value <= 0xff) value.toByte else '?'.toByte
+      ensure(1)
+      bytes(length) = byte
+      length += 1
+    }
+
+    def appendAscii(value: String): Unit = {
+      ensure(value.length)
+      var index = 0
+      while (index < value.length) {
+        bytes(length) = value.charAt(index).toByte
+        length += 1
+        index += 1
+      }
+    }
+
+    def appendHttp(value: String): Unit = {
+      ensure(value.length)
+      var index = 0
+      while (index < value.length) {
+        val character = value.charAt(index)
+        bytes(length) = if (character <= 0xff) character.toByte else '?'.toByte
+        length += 1
+        index += 1
+      }
+    }
+
+    def result(): Array[Byte] = java.util.Arrays.copyOf(bytes, length)
+
+    private def ensure(additional: Int): Unit = {
+      val required = length + additional
+      if (required > bytes.length) {
+        var capacity = bytes.length
+        while (capacity < required) capacity *= 2
+        bytes = java.util.Arrays.copyOf(bytes, capacity)
+      }
+    }
   }
 
 }
