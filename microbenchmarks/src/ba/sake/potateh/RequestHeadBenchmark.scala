@@ -59,5 +59,6 @@ object RequestHeadBenchmark {
       }
     }
     println(s"sink=$sink")
+    ResponseHeadBenchmark.run()
   }
 }

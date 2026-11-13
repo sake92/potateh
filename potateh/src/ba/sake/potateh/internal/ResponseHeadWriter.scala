@@ -19,6 +19,15 @@ private[potateh] object ResponseHeadWriter {
 
   import Framing.*
 
+  private val managedHeaders = Set(
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+    "upgrade",
+    "trailer"
+  )
+
   final case class Prepared(
       bytes: Array[Byte],
       framing: Framing,
@@ -47,17 +56,10 @@ private[potateh] object ResponseHeadWriter {
       method != "CONNECT" || status < 200 || status >= 300,
       "Tunnels are unsupported"
     )
-    val managed = Set(
-      "content-length",
-      "transfer-encoding",
-      "connection",
-      "keep-alive",
-      "upgrade",
-      "trailer"
-    )
     response.headers.fields.foreach { case (key, _) =>
+      val managed = managedHeaders.exists(name => name.length == key.length && name.equalsIgnoreCase(key))
       require(
-        !managed.exists(_.equalsIgnoreCase(key)) || (status == 426 && key.equalsIgnoreCase("Upgrade")),
+        !managed || (status == 426 && key.equalsIgnoreCase("Upgrade")),
         "Engine owns framing and connection headers"
       )
     }

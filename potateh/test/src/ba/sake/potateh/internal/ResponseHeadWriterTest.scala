@@ -38,6 +38,15 @@ class ResponseHeadWriterTest extends munit.FunSuite {
       "HTTP/1.1 201 Created\r\nDate: " + date + "\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\nContent-Length: 1\r\n\r\n"
     )
   }
+  test("serializes all permitted Latin-1 field bytes") {
+    val value = "\t" + (128 to 255).map(_.toChar).mkString
+    val response = Response(headers = Headers("Date" -> date, "X-Bytes" -> value))
+    val expected = s"HTTP/1.1 200 OK\r\nDate: $date\r\nX-Bytes: $value\r\nContent-Length: 0\r\n\r\n"
+    assertEquals(
+      prepare("GET", "HTTP/1.1", response, false).bytes.toSeq,
+      expected.getBytes(ISO_8859_1).toSeq
+    )
+  }
   test("preserves application header order before managed chunked and connection fields") {
     val headers = Headers("Set-Cookie" -> "a=1", "Date" -> date, "Set-Cookie" -> "b=2")
     val response = Response(200, headers, ResponseBody.Writer()(_ => ()))
@@ -126,14 +135,16 @@ class ResponseHeadWriterTest extends munit.FunSuite {
         "Keep-Alive"
       )
     ) {
-      intercept[IllegalArgumentException](
-        prepare(
-          "GET",
-          "HTTP/1.1",
-          Response(headers = Headers(name -> "x")),
-          false
+      for (variant <- List(name, name.toLowerCase, name.toUpperCase)) {
+        intercept[IllegalArgumentException](
+          prepare(
+            "GET",
+            "HTTP/1.1",
+            Response(headers = Headers(variant -> "x")),
+            false
+          )
         )
-      )
+      }
     }
     for (
       (name, value) <- List(

@@ -1,8 +1,8 @@
 # Microbenchmarks
 
-Measures request-head parsing and URI construction on Scala Native. The request-head cases cover origin, escaped and absolute targets, plus CONNECT authorities. They parse in-memory input and include target and Host validation; they do not include socket reads. The URI cases measure the URI constructions used for common origin targets and Host values, not the complete validation logic.
+Measures request-head parsing, URI construction, and response-head preparation on Scala Native. The response cases cover empty, typical, many-header, and chunked responses, with automatic and supplied Date fields. The request-head cases cover origin, escaped and absolute targets, plus CONNECT authorities. They parse in-memory input and include target and Host validation; they do not include socket reads. The URI cases measure the URI constructions used for common origin targets and Host values, not the complete validation logic.
 
-Each case runs three warmup batches and five measured batches of 50,000 operations. Results are elapsed nanoseconds per operation; a checksum consumes the results.
+Each case runs three warmup batches and five measured batches of 50,000 operations for request and URI cases or 100,000 for response cases. Results are elapsed nanoseconds per operation; a checksum consumes the results.
 
 From the repository root, build an optimized executable and run it:
 
