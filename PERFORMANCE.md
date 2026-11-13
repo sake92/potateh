@@ -1,9 +1,9 @@
 # Performance findings
 
 These are local, directional measurements from 2026-11-13, not release
-qualification. The target was Scala 3.9.0 and Scala Native 0.5.12 with
-`release-fast` and LTO disabled. The server ran on CPUs 0-3 and h2load on CPUs
-4-7. Raw output and benchmark helpers are intentionally not committed.
+qualification. The target was Scala 3.9.0 and Scala Native with `release-fast`
+and LTO disabled. The server ran on CPUs 0-3 and h2load on CPUs 4-7. Raw output
+and benchmark helpers are intentionally not committed.
 
 ## 64-connection pipelined baseline
 
@@ -102,16 +102,17 @@ After the loop change, allocation, request-head `StringBuilder` construction,
 `String.charAt`, module loading, case-insensitive header handling, and Sharaf
 response adaptation remain prominent.
 
-The next candidates are:
+The intermittent Scala Native allocator crash was reproduced with concurrent
+JSON responses: Scala Native 0.5.12 crashed on the first stress cycle, while
+the fixed 0.5.13 snapshot completed 30 of 30 cycles without failures. The fixed
+runtime did not regress the pipeline benchmark. The remaining candidates are:
 
-1. investigate the intermittent Scala Native `SIGSEGV`/GC-trap failures seen
-   during repeated connection teardown;
-2. parse request-head spans directly from the connection buffer instead of
+1. parse request-head spans directly from the connection buffer instead of
    appending one character at a time to `StringBuilder`;
-3. construct Potateh's final response-header vector once instead of repeated
+2. construct Potateh's final response-header vector once instead of repeated
    `remove`/`add` operations;
-4. add a known-length response path for small `String` and byte-array bodies;
-5. move remaining case-insensitive header comparisons to allocation-light
+3. add a known-length response path for small `String` and byte-array bodies;
+4. move remaining case-insensitive header comparisons to allocation-light
    ASCII paths.
 
 ## Measurement traps

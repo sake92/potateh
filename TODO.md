@@ -6,6 +6,8 @@ https://index.scala-lang.org/outr/scribe
 
 # Planned improvements
 
+- [ ] Replace the pinned Scala Native allocator snapshot with the stable 0.5.13
+  release when available.
 - [ ] Add protocol upgrade support for a separate WebSocket implementation:
   preserve buffered input, define stream lifetime/timeouts, and retain connection
   admission and shutdown ownership.

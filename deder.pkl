@@ -9,7 +9,8 @@ local const publishRepo = if (read?("env:DEDER_PUBLISH_SNAPSHOT") == "true")
 else
   new SonatypeCentralRepo { id = "sonatype" }
 
-local const nativeVersion = read?("env:POTATEH_SCALA_NATIVE_VERSION") ?? "0.5.12"
+local const nativeVersion =
+  read?("env:POTATEH_SCALA_NATIVE_VERSION") ?? "0.5.13-20261107-69432d9-SNAPSHOT"
 
 local const core = new CreateCrossModules {
   root = "potateh"
