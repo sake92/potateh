@@ -80,6 +80,11 @@ private[potateh] object RequestHeadParser {
     RequestTargetValidation.validateTarget(method, target)
 
     val fields = Vector.newBuilder[(name: String, value: String)]
+    var host: String = null
+    var hostCount = 0
+    var contentLength: String = null
+    var contentLengthCount = 0
+    var transferEncodings = Vector.empty[String]
     var sectionBytes = 0
     var count = 0
     var done = false
@@ -96,16 +101,25 @@ private[potateh] object RequestHeadParser {
           HttpSyntax.field(field).getOrElse(fail(400, "Invalid header field"))
         }
         fields += parsed
+        val name = parsed.name
+        if (name.length == 4 && HttpSyntax.equalsIgnoreCaseAscii(name, "Host")) {
+          host = parsed.value
+          hostCount += 1
+        } else if (name.length == 14 && HttpSyntax.equalsIgnoreCaseAscii(name, "Content-Length")) {
+          contentLength = parsed.value
+          contentLengthCount += 1
+        } else if (name.length == 17 && HttpSyntax.equalsIgnoreCaseAscii(name, "Transfer-Encoding")) {
+          transferEncodings = transferEncodings :+ parsed.value
+        }
         count += 1
       }
     }
     val headers = fields.result()
-    val hosts = values(headers, "Host")
-    if (hosts.size > 1 || (version == "HTTP/1.1" && hosts.isEmpty)) {
+    if (hostCount > 1 || (version == "HTTP/1.1" && hostCount == 0)) {
       fail(400, "Missing or repeated Host")
     }
-    hosts.foreach(RequestTargetValidation.validateHost)
-    val framing = selectFraming(headers, version)
+    if (hostCount == 1) RequestTargetValidation.validateHost(host)
+    val framing = selectFraming(contentLength, contentLengthCount, transferEncodings, version)
     Some(RequestHead(method, target, version, headers, framing))
   }
 
@@ -135,17 +149,19 @@ private[potateh] object RequestHeadParser {
   }
 
   private def selectFraming(
-      headers: Vector[(name: String, value: String)],
+      contentLength: String,
+      contentLengthCount: Int,
+      transferEncodings: Vector[String],
       version: String
   ): BodyFraming = {
-    val lengths = values(headers, "Content-Length")
-    val encodings = values(headers, "Transfer-Encoding")
-    if (lengths.nonEmpty && encodings.nonEmpty) {
+    if (contentLengthCount > 0 && transferEncodings.nonEmpty) {
       fail(400, "Conflicting body framing")
     }
-    if (encodings.nonEmpty) {
+    if (transferEncodings.nonEmpty) {
       if (version == "HTTP/1.0") fail(400, "Transfer-Encoding on HTTP/1.0")
-      val codings = HttpSyntax.listElements(encodings).getOrElse(fail(400, "Too many empty transfer codings"))
+      val codings = HttpSyntax
+        .listElements(transferEncodings)
+        .getOrElse(fail(400, "Too many empty transfer codings"))
       if (codings.isEmpty || !areTokens(codings)) {
         fail(400, "Invalid transfer coding")
       }
@@ -157,9 +173,9 @@ private[potateh] object RequestHeadParser {
       }
       if (codings.size != 1) fail(501, "Unsupported transfer coding")
       Chunked
-    } else if (lengths.nonEmpty) {
-      if (lengths.size != 1) fail(400, "Repeated Content-Length")
-      val value = lengths.head
+    } else if (contentLengthCount > 0) {
+      if (contentLengthCount != 1) fail(400, "Repeated Content-Length")
+      val value = contentLength
       if (value.isEmpty) fail(400, "Empty Content-Length")
       var length = 0L
       value.foreach { c =>
@@ -172,15 +188,6 @@ private[potateh] object RequestHeadParser {
       }
       FixedLength(length)
     } else NoBody
-  }
-
-  private def values(
-      headers: Vector[(name: String, value: String)],
-      name: String
-  ): Vector[String] = {
-    headers.collect {
-      case (key, value) if HttpSyntax.equalsIgnoreCaseAscii(key, name) => value
-    }
   }
 
   private def fail(code: Int, message: String): Nothing = {
