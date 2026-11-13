@@ -107,13 +107,16 @@ JSON responses: Scala Native 0.5.12 crashed on the first stress cycle, while
 the fixed 0.5.13 snapshot completed 30 of 30 cycles without failures. The fixed
 runtime did not regress the pipeline benchmark. The remaining candidates are:
 
-1. parse request-head spans directly from the connection buffer instead of
-   appending one character at a time to `StringBuilder`;
-2. construct Potateh's final response-header vector once instead of repeated
+1. construct Potateh's final response-header vector once instead of repeated
    `remove`/`add` operations;
-3. add a known-length response path for small `String` and byte-array bodies;
-4. move remaining case-insensitive header comparisons to allocation-light
+2. add a known-length response path for small `String` and byte-array bodies;
+3. move remaining case-insensitive header comparisons to allocation-light
    ASCII paths.
+
+A direct byte-span request-head prototype was measured and rejected. It used
+more instructions and ran about 5% slower than the `StringBuilder` parser, even
+after forcing the small helpers inline. The experiment remains on the isolated
+`perf/request-spans` branch.
 
 ## Measurement traps
 
