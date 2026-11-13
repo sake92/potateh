@@ -24,7 +24,7 @@ flowchart TD
         Writer --> Output["FixedLengthOutputStream / ChunkedOutputStream<br/>or connection-delimited output"]
         Output --> Socket["Buffered socket output"]
         Socket -->|"response bytes"| Client
-        Engine --> Watcher["WriteTimeouts<br/>one watcher thread per server"]
+        Engine --> Watcher["WriteTimeouts<br/>one watcher thread when enabled"]
         Watcher -.->|"close socket on expired write"| Socket
         Exchange -->|"complete body and persistence allow reuse"| Worker
     end

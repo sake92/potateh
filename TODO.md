@@ -1,3 +1,9 @@
+
+add some logging
+https://index.scala-lang.org/outr/scribe
+
+- DRY, simplify
+
 # Planned improvements
 
 - [ ] Add protocol upgrade support for a separate WebSocket implementation:

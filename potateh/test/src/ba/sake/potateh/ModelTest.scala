@@ -45,8 +45,7 @@ class ModelTest extends munit.FunSuite {
     val cases = List[(name: String, update: FiniteDuration => HttpTimeouts)](
       ("idleTimeout", timeouts.withIdleTimeout),
       ("requestHeadTimeout", timeouts.withRequestHeadTimeout),
-      ("bodyReadTimeout", timeouts.withBodyReadTimeout),
-      ("writeTimeout", timeouts.withWriteTimeout)
+      ("bodyReadTimeout", timeouts.withBodyReadTimeout)
     )
     cases.foreach { case (name, update) =>
       for (invalid <- List(-1.nanosecond, Duration.Zero, Int.MaxValue.toLong.millis + 1.nanosecond)) {
@@ -56,6 +55,15 @@ class ModelTest extends munit.FunSuite {
       update(1.nanosecond)
       update(Int.MaxValue.toLong.millis)
     }
+    for (invalid <- List(-1.nanosecond, Int.MaxValue.toLong.millis + 1.nanosecond)) {
+      val expected = {
+        s"requirement failed: writeTimeout must be nonnegative and at most 2147483647 milliseconds (was $invalid)"
+      }
+      interceptMessage[IllegalArgumentException](expected)(timeouts.withWriteTimeout(invalid))
+    }
+    assertEquals(timeouts.withWriteTimeout(Duration.Zero).writeTimeout, Duration.Zero)
+    assertEquals(timeouts.withWriteTimeout(1.nanosecond).writeTimeout, 1.nanosecond)
+    assertEquals(timeouts.withWriteTimeout(Int.MaxValue.toLong.millis).writeTimeout, Int.MaxValue.toLong.millis)
     for (invalid <- List(-1.nanosecond, 1.day + 1.nanosecond)) {
       val expected = s"requirement failed: shutdownGrace must be between zero and one day (was $invalid)"
       interceptMessage[IllegalArgumentException](expected)(timeouts.withShutdownGrace(invalid))
@@ -125,7 +133,7 @@ class ModelTest extends munit.FunSuite {
     assertEquals(HttpTimeouts.Default.requestHeadTimeout, 10.seconds)
     assertEquals(original.maxConnections, 17)
     assertEquals(original.limits.maxBodyBytes, Some(8L * 1024 * 1024))
-    assertEquals(original.timeouts.writeTimeout, 30.seconds)
+    assertEquals(original.timeouts.writeTimeout, Duration.Zero)
     intercept[IllegalArgumentException](original.withMaxConnections(0))
     intercept[IllegalArgumentException](original.limits.withMaxBodyBytes(Some(-1)))
     intercept[IllegalArgumentException](original.timeouts.withRequestHeadTimeout(Duration.Zero))

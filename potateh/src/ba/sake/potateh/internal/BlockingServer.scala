@@ -63,7 +63,9 @@ private[potateh] final class BlockingServer(
       (executor = pool: Executor, ownedExecutor = Some(pool))
   }
 
-  private val writes = new WriteTimeouts(config.timeouts.writeTimeout.toNanos)
+  private val writes = Option.when(config.timeouts.writeTimeout.toNanos > 0) {
+    new WriteTimeouts(config.timeouts.writeTimeout.toNanos)
+  }
   private val acceptThread = new Thread(() => accept(), "potateh-accept")
 
   val address: InetSocketAddress = {
@@ -72,7 +74,7 @@ private[potateh] final class BlockingServer(
 
   def start(): Unit = {
     try {
-      writes.thread.start()
+      writes.foreach(_.thread.start())
       acceptThread.start()
     } catch {
       case error: Throwable =>
@@ -123,7 +125,7 @@ private[potateh] final class BlockingServer(
         }
         connections.foreach(c => close(c.socket))
       }
-      writes.stop()
+      writes.foreach(_.stop())
       ownedExecutor match {
         case Some(pool) if !fromConnection =>
           while (!pool.isTerminated && deadline - System.nanoTime() > 0) {
@@ -146,7 +148,8 @@ private[potateh] final class BlockingServer(
             }
           }
       }
-      Vector(acceptThread, writes.thread).filterNot(_ eq self).foreach { thread =>
+      val ownedThreads = Vector(acceptThread) ++ writes.toVector.map(_.thread)
+      ownedThreads.filterNot(_ eq self).foreach { thread =>
         while (thread.isAlive && deadline - System.nanoTime() > 0) {
           try thread.join(millis(deadline - System.nanoTime()))
           catch { case _: InterruptedException => interrupted = true }
@@ -219,7 +222,11 @@ private[potateh] final class BlockingServer(
         new BufferedInputStream(socket.getInputStream()),
         1
       )
-      val output = new BufferedOutputStream(writes.output(socket))
+      val socketOutput = writes match {
+        case Some(watcher) => watcher.output(socket)
+        case None          => socket.getOutputStream()
+      }
+      val output = new BufferedOutputStream(socketOutput)
       var first = true
       var reuse = true
       while (reuse && running) {

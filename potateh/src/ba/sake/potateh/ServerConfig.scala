@@ -180,8 +180,7 @@ final class HttpTimeouts private (
   List(
     "idleTimeout" -> idleTimeout,
     "requestHeadTimeout" -> requestHeadTimeout,
-    "bodyReadTimeout" -> bodyReadTimeout,
-    "writeTimeout" -> writeTimeout
+    "bodyReadTimeout" -> bodyReadTimeout
   )
     .foreach { case (name, value) =>
       require(
@@ -189,6 +188,10 @@ final class HttpTimeouts private (
         s"$name must be positive and at most 2147483647 milliseconds (was $value)"
       )
     }
+  require(
+    writeTimeout.toNanos >= 0 && writeTimeout.toNanos <= Int.MaxValue.toLong * 1000000L,
+    s"writeTimeout must be nonnegative and at most 2147483647 milliseconds (was $writeTimeout)"
+  )
   require(
     shutdownGrace.toNanos >= 0 && shutdownGrace <= 1.day,
     s"shutdownGrace must be between zero and one day (was $shutdownGrace)"
@@ -206,6 +209,7 @@ final class HttpTimeouts private (
     copy(bodyReadTimeout = value)
   }
 
+  /** A zero duration disables the socket write timeout. */
   def withWriteTimeout(value: FiniteDuration): HttpTimeouts = {
     copy(writeTimeout = value)
   }
@@ -261,7 +265,7 @@ object HttpTimeouts {
     idleTimeout = 15.seconds,
     requestHeadTimeout = 10.seconds,
     bodyReadTimeout = 30.seconds,
-    writeTimeout = 30.seconds,
+    writeTimeout = Duration.Zero,
     shutdownGrace = 5.seconds
   )
 }

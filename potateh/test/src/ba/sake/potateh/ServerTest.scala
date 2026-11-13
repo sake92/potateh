@@ -1069,6 +1069,52 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("disabled write timeout leaves blocked writes open until server shutdown") {
+    val started = new CountDownLatch(1)
+    val finished = new CountDownLatch(1)
+    val settings = config
+      .withMaxConnections(1)
+      .withTimeouts(
+        config.timeouts.withWriteTimeout(Duration.Zero).withShutdownGrace(200.millis)
+      )
+    val server = Server.start(settings) { _ =>
+      Response(body = ResponseBody.Writer() { out =>
+        started.countDown()
+        try {
+          val block = new Array[Byte](65536)
+          (0 until 4096).foreach(_ => out.write(block))
+        } finally finished.countDown()
+      })
+    }
+    try {
+      withSocket(server) { socket =>
+        socket.setReceiveBufferSize(1024)
+        send(socket, get("/large"))
+        await(started)
+        assert(!finished.await(750, TimeUnit.MILLISECONDS))
+        server.stop()
+        await(finished)
+      }
+    } finally server.stop()
+  }
+
+  test("completed writes do not expire an idle persistent connection") {
+    val settings = config.withTimeouts(
+      config.timeouts.withIdleTimeout(3.seconds).withWriteTimeout(100.millis)
+    )
+    withServer(settings)(_ => response("ok")) { server =>
+      withSocket(server) { socket =>
+        for (_ <- 1 to 4) {
+          send(socket, get())
+          assertEquals(receive(socket).body, "ok")
+          Thread.sleep(250)
+        }
+        send(socket, get())
+        assertEquals(receive(socket).body, "ok")
+      }
+    }
+  }
+
   test("blocked socket writes expire and the server recovers") {
     val started = new CountDownLatch(1)
     val finished = new CountDownLatch(1)
@@ -1094,6 +1140,37 @@ class ServerTest extends munit.FunSuite {
         withSocket(server) { socket =>
           send(socket, get())
           assertEquals(receive(socket).body, "ok")
+        }
+      }
+    }
+  }
+
+  test("one blocked writer times out without closing another connection") {
+    val started = new CountDownLatch(1)
+    val finished = new CountDownLatch(1)
+    val settings = config.withMaxConnections(2).withTimeouts(config.timeouts.withIdleTimeout(3.seconds))
+    withServer(settings) { request =>
+      if (request.target != "/large") response("ok")
+      else {
+        Response(body = ResponseBody.Writer() { out =>
+          started.countDown()
+          try {
+            val block = new Array[Byte](65536)
+            (0 until 4096).foreach(_ => out.write(block))
+          } finally finished.countDown()
+        })
+      }
+    } { server =>
+      withSocket(server) { slow =>
+        slow.setReceiveBufferSize(1024)
+        send(slow, get("/large"))
+        await(started)
+        withSocket(server) { fast =>
+          send(fast, get())
+          assertEquals(receive(fast).body, "ok")
+          await(finished)
+          send(fast, get())
+          assertEquals(receive(fast).body, "ok")
         }
       }
     }

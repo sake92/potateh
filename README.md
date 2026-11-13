@@ -66,11 +66,15 @@ Pass `config` to `Server.start(config)` in the example above.
 | Maximum request body | 8 MiB |
 | Idle keep-alive timeout | 15 seconds |
 | Request-head deadline | 10 seconds |
-| Body-read / write timeout | 30 seconds each |
+| Body-read timeout | 30 seconds |
+| Write timeout | Disabled |
 | Shutdown grace | 5 seconds |
 
 `HttpLimits` also bounds request lines, headers, chunks and trailers.
 Use `withMaxBodyBytes(None)` to disable the body size limit.
+Set `HttpTimeouts.Default.withWriteTimeout(30.seconds)` to limit blocked socket writes;
+zero disables the timeout. Without it, a client that stops reading can hold a connection
+and worker until the socket is closed.
 `withOnError` replaces the default exchange-error reporting to stderr;
 the callback runs on connection workers and should complete promptly.
 
