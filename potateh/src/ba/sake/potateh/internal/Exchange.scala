@@ -162,7 +162,7 @@ private[potateh] final class Exchange(
       reject(400)
       break(false)
     }
-    if (!options.forall(_.forall(HttpSyntax.isToken))) {
+    if (!HttpSyntax.areTokens(options)) {
       reject(400)
       break(false)
     }

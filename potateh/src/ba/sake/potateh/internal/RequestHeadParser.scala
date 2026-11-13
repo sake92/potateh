@@ -5,7 +5,7 @@ import java.io.{IOException, InputStream}
 import scala.util.boundary
 
 import boundary.break
-import HttpSyntax.isToken
+import HttpSyntax.{areTokens, isTokenName}
 
 /** Strict HTTP/1.x head parsing. The caller owns and reuses the input stream. After a parse failure the connection must
   * be closed, not parsed again.
@@ -59,14 +59,15 @@ private[potateh] object RequestHeadParser {
       readLine(input, first, limits.maxRequestLineBytes, 414, requestLine = true)
     }
     val firstSpace = line.indexOf(' ')
-    val lastSpace = line.lastIndexOf(' ')
+    var lastSpace = line.length - 1
+    while lastSpace > firstSpace && line.charAt(lastSpace) != ' ' do lastSpace -= 1
     if (firstSpace <= 0 || lastSpace <= firstSpace + 1) {
       fail(400, "Invalid request line")
     }
     val method = line.substring(0, firstSpace)
     val target = line.substring(firstSpace + 1, lastSpace)
     val suppliedVersion = line.substring(lastSpace + 1)
-    if (!method.forall(isToken)) fail(400, "Invalid method")
+    if (!isTokenName(method)) fail(400, "Invalid method")
     if (
       suppliedVersion.length != 8 || !suppliedVersion.startsWith("HTTP/") ||
       suppliedVersion.charAt(5) < '0' || suppliedVersion.charAt(5) > '9' ||
@@ -145,7 +146,7 @@ private[potateh] object RequestHeadParser {
     if (encodings.nonEmpty) {
       if (version == "HTTP/1.0") fail(400, "Transfer-Encoding on HTTP/1.0")
       val codings = HttpSyntax.listElements(encodings).getOrElse(fail(400, "Too many empty transfer codings"))
-      if (codings.isEmpty || codings.exists(c => !c.forall(isToken))) {
+      if (codings.isEmpty || !areTokens(codings)) {
         fail(400, "Invalid transfer coding")
       }
       if (

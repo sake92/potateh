@@ -32,7 +32,10 @@ private[potateh] object HttpSyntax {
 
   def field(line: String): Option[(name: String, value: String)] = boundary {
     val colon = line.indexOf(':')
-    if (colon <= 0 || !line.substring(0, colon).forall(isToken)) break(None)
+    if (colon <= 0) break(None)
+    var nameIndex = 0
+    while nameIndex < colon && isToken(line.charAt(nameIndex)) do nameIndex += 1
+    if (nameIndex != colon) break(None)
     val value = line.substring(colon + 1)
     if (!isFieldValue(value)) break(None)
     Some((name = line.substring(0, colon), value = trimOws(value)))
@@ -50,12 +53,34 @@ private[potateh] object HttpSyntax {
   }
 
   def isToken(c: Char): Boolean = {
-    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-    (c >= '0' && c <= '9') || "!#$%&'*+-.^_`|~".indexOf(c) >= 0
+    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+    (c match {
+      case '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_' | '`' | '|' | '~' => true
+      case _                                                                                        => false
+    })
+  }
+
+  def isTokenName(value: String): Boolean = {
+    var index = 0
+    while index < value.length && isToken(value.charAt(index)) do index += 1
+    index == value.length && index > 0
+  }
+
+  def areTokens(values: Seq[String]): Boolean = {
+    var index = 0
+    while index < values.length && isTokenName(values(index)) do index += 1
+    index == values.length
   }
 
   def isFieldValue(value: String): Boolean = {
-    value.forall(c => c == '\t' || (c >= ' ' && c != 127 && c <= 255))
+    var index = 0
+    var valid = true
+    while index < value.length && valid do {
+      val c = value.charAt(index)
+      if (c != '\t' && (c < ' ' || c == 127 || c > 255)) valid = false
+      index += 1
+    }
+    valid
   }
 
 }

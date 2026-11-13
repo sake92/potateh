@@ -43,7 +43,7 @@ object Headers {
   }
 
   private def validate(name: String, value: String): Unit = {
-    require(name.nonEmpty && name.forall(internal.HttpSyntax.isToken), "Invalid header name")
+    require(internal.HttpSyntax.isTokenName(name), "Invalid header name")
     require(internal.HttpSyntax.isFieldValue(value), "Invalid header value")
   }
 

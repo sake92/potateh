@@ -72,8 +72,8 @@ private[potateh] object ResponseHeadWriter {
           val slash = protocol.indexOf('/')
           val name = if (slash < 0) protocol else protocol.substring(0, slash)
           val version = if (slash < 0) None else Some(protocol.substring(slash + 1))
-          name.nonEmpty && name.forall(HttpSyntax.isToken) &&
-          version.forall(value => value.nonEmpty && value.forall(HttpSyntax.isToken))
+          HttpSyntax.isTokenName(name) &&
+          version.forall(HttpSyntax.isTokenName)
         },
         "426 requires valid Upgrade protocols"
       )
