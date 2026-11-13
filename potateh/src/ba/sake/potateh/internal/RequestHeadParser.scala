@@ -1,7 +1,6 @@
 package ba.sake.potateh.internal
 
 import java.io.{IOException, InputStream}
-import java.net.{URI, URISyntaxException}
 
 import scala.util.boundary
 
@@ -77,7 +76,7 @@ private[potateh] object RequestHeadParser {
     }
     if (suppliedVersion.charAt(5) != '1') fail(505, "Unsupported HTTP version")
     val version = if (suppliedVersion == "HTTP/1.0") "HTTP/1.0" else "HTTP/1.1"
-    validateTarget(method, target)
+    RequestTargetValidation.validateTarget(method, target)
 
     val fields = Vector.newBuilder[(name: String, value: String)]
     var sectionBytes = 0
@@ -104,7 +103,7 @@ private[potateh] object RequestHeadParser {
     if (hosts.size > 1 || (version == "HTTP/1.1" && hosts.isEmpty)) {
       fail(400, "Missing or repeated Host")
     }
-    hosts.foreach(validateHost)
+    hosts.foreach(RequestTargetValidation.validateHost)
     val framing = selectFraming(headers, version)
     Some(RequestHead(method, target, version, headers, framing))
   }
@@ -172,110 +171,6 @@ private[potateh] object RequestHeadParser {
       }
       FixedLength(length)
     } else NoBody
-  }
-
-  private def validateTarget(method: String, target: String): Unit = {
-    if (!target.forall(c => c > ' ' && c < 127) || target.indexOf('#') >= 0) {
-      fail(400, "Invalid request target")
-    }
-    if (target == "*") {
-      if (method != "OPTIONS") fail(400, "Asterisk target requires OPTIONS")
-    } else if (method == "CONNECT") {
-      val uri = parseUri("http://" + target)
-      if (
-        !validAuthority(uri, requirePort = true) || uri
-          .getRawPath() != "" ||
-        Option(uri.getRawQuery()).nonEmpty || Option(
-          uri.getRawUserInfo()
-        ).nonEmpty
-      ) {
-        fail(400, "Invalid CONNECT authority")
-      }
-    } else if (target.startsWith("/")) {
-      // Prefixing an authority keeps a leading // in the path, rather than
-      // letting URI reinterpret it as an authority. Preserve the raw target.
-      parseUri("http://request.invalid" + target)
-    } else {
-      val uri = parseUri(target)
-      if (
-        !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(
-          uri.getScheme()
-        )) ||
-        !validAuthority(uri, requirePort = false)
-      ) {
-        fail(400, "Invalid absolute request target")
-      }
-    }
-  }
-
-  private def validateHost(value: String): Unit = {
-    // Empty Host is permitted when the target authority is undefined.
-    if (value.nonEmpty) {
-      val uri = parseUri("http://" + value)
-      if (
-        !validAuthority(uri, requirePort = false) ||
-        uri.getRawPath() != "" || Option(uri.getRawQuery()).nonEmpty || Option(
-          uri.getRawFragment()
-        ).nonEmpty
-      ) {
-        fail(400, "Invalid Host")
-      }
-    }
-  }
-
-  private def validAuthority(uri: URI, requirePort: Boolean): Boolean = {
-    val authority = Option(uri.getRawAuthority()).getOrElse("")
-    val closingBracket = authority.indexOf(']')
-    val separator = {
-      if (authority.startsWith("[") && closingBracket >= 0) closingBracket + 1
-      else {
-        authority.indexOf(':') match {
-          case -1    => authority.length
-          case index => index
-        }
-      }
-    }
-    val host = authority.substring(0, separator)
-    val suffix = authority.substring(separator)
-    val validHost = {
-      if (host.startsWith("[")) Option(uri.getHost()).nonEmpty
-      else validRegisteredName(host)
-    }
-    val validPort = {
-      if (suffix.isEmpty) !requirePort
-      else if (!suffix.startsWith(":")) false
-      else {
-        val port = suffix.substring(1)
-        if (port.isEmpty) !requirePort
-        else port.forall(c => c >= '0' && c <= '9') && port.toIntOption.nonEmpty
-      }
-    }
-    validHost && validPort
-  }
-
-  private def validRegisteredName(host: String): Boolean = {
-    def hex(c: Char): Boolean = {
-      (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-    }
-    var index = 0
-    var valid = host.nonEmpty
-    while (index < host.length && valid) {
-      val c = host.charAt(index)
-      if (c == '%') {
-        valid = index + 2 < host.length && hex(host.charAt(index + 1)) && hex(host.charAt(index + 2))
-        index += 3
-      } else {
-        valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-          (c >= '0' && c <= '9') || "-._~!$&'()*+,;=".contains(c)
-        index += 1
-      }
-    }
-    valid
-  }
-
-  private def parseUri(value: String): URI = {
-    try new URI(value)
-    catch { case _: URISyntaxException => fail(400, "Invalid URI syntax") }
   }
 
   private def values(

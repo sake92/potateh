@@ -103,6 +103,46 @@ class RequestHeadParserTest extends munit.FunSuite {
     rejected("GET / HTTP/2.0\r\n\r\n", 505)
   }
 
+  test("preserves request target validation for common and unusual paths") {
+    val accepted = List("/", "//double/path", "/a-b_c.~/?x=1&y=2", "/a?b?c", "/a%2Fb?q=x%2By")
+    accepted.foreach { target =>
+      assertEquals(parse(s"GET $target HTTP/1.1\r\nHost: example.org:8080\r\n\r\n").target, target)
+    }
+    List("/a%", "/a%2", "/a%GG", "/a#b", "/a|b", "/a[b]").foreach { target =>
+      rejected(s"GET $target HTTP/1.1\r\nHost: example.org:8080\r\n\r\n", 400)
+    }
+    rejected("CONNECT /a HTTP/1.1\r\nHost: example.org\r\n\r\n", 400)
+  }
+
+  test("preserves Host validation across common and unusual authorities") {
+    val accepted = List(
+      "localhost",
+      "localhost:8080",
+      "example.org:0",
+      "a-b.example:65535",
+      "foo_bar",
+      "%65xample.org",
+      "[::1]:443",
+      ""
+    )
+    accepted.foreach { host =>
+      assertEquals(parse(s"GET / HTTP/1.1\r\nHost: $host\r\n\r\n").headers.head.value, host)
+    }
+    List(
+      "host:abc",
+      "host:1:2",
+      "host:2147483648",
+      "user@host",
+      "host/path",
+      "host?query",
+      "host#fragment",
+      "bad%2",
+      "[not-ip]:80"
+    ).foreach { host =>
+      rejected(s"GET / HTTP/1.1\r\nHost: $host\r\n\r\n", 400)
+    }
+  }
+
   test("acceptsOneLeadingCrlfAndHigherHttp1MinorVersions") {
     for (minor <- 2 to 9) {
       val head = parse(s"\r\nGET / HTTP/1.$minor\r\nHost: x\r\n\r\n")
