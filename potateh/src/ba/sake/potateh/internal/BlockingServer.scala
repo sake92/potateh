@@ -1,6 +1,6 @@
 package ba.sake.potateh.internal
 
-import java.io.{BufferedInputStream, BufferedOutputStream, IOException, InputStream, PushbackInputStream}
+import java.io.{BufferedOutputStream, IOException}
 import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{Executor, Executors, RejectedExecutionException, TimeUnit}
@@ -219,10 +219,7 @@ private[potateh] final class BlockingServer(
     try {
       boundary {
         socket.setTcpNoDelay(true)
-        val input = new PushbackInputStream(
-          new BufferedInputStream(socket.getInputStream()),
-          1
-        )
+        val input = new ConnectionInput(socket, socket.getInputStream())
         val socketOutput = writes match {
           case Some(watcher) => watcher.output(socket)
           case None          => socket.getOutputStream()
@@ -231,45 +228,25 @@ private[potateh] final class BlockingServer(
         var first = true
         var reuse = true
         while (reuse && running) {
-          val headStart = System.nanoTime()
           socket.setSoTimeout(millis(config.timeouts.idleTimeout.toNanos).toInt)
           // Initial silent sockets are bounded by the absolute head deadline.
-          if (first) {
-            socket.setSoTimeout(millis(config.timeouts.requestHeadTimeout.toNanos).toInt)
+          val headStart = System.nanoTime()
+          val initialTimeout = {
+            if (first) millis(config.timeouts.requestHeadTimeout.toNanos).toInt
+            else millis(config.timeouts.idleTimeout.toNanos).toInt
           }
-          val next = input.read()
+          val next = input.peek(initialTimeout)
           if (next == -1) break()
-          input.unread(next)
           val deadline = {
             if (first) headStart + config.timeouts.requestHeadTimeout.toNanos
             else System.nanoTime() + config.timeouts.requestHeadTimeout.toNanos
           }
           first = false
-          val headInput = new InputStream {
-            private var readTimeoutMillis = 0
-
-            override def read(): Int = {
-              val remaining = deadline - System.nanoTime()
-              if (remaining <= 0) {
-                throw new SocketTimeoutException("Request head deadline exceeded")
-              }
-              val timeoutMillis = millis(remaining).toInt
-              // Native sets SO_RCVTIMEO on every call, even when the value is unchanged.
-              if (timeoutMillis != readTimeoutMillis) {
-                socket.setSoTimeout(timeoutMillis)
-                readTimeoutMillis = timeoutMillis
-              }
-              val byte = input.read()
-              if (deadline - System.nanoTime() <= 0) {
-                throw new SocketTimeoutException("Request head deadline exceeded")
-              }
-              byte
-            }
-          }
+          input.beginHeadDeadline(deadline)
           val limits = config.limits
           val head = try {
             RequestHeadParser.read(
-              headInput,
+              input,
               RequestHeadParser.Limits(
                 limits.maxRequestLineBytes,
                 limits.maxHeaderLineBytes,
@@ -285,6 +262,7 @@ private[potateh] final class BlockingServer(
               reject(socket, output, 408)
               break()
           }
+          input.clearHeadDeadline()
           head match {
             case None        => break()
             case Some(value) =>
