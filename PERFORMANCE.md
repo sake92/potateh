@@ -88,6 +88,14 @@ The portability lesson is not that collection methods are generally slow. It
 is that short, pure, extremely hot loops can pay for explicit primitive
 implementations on Scala Native. Apply this only in measured hot paths.
 
+## Possible automation
+
+A Scalafix rule could flag generic character traversals such as `forall`,
+`exists`, and `indexWhere` inside opt-in annotated hot-path code. Diagnostics
+should come before autofixes. An automatic rewrite is safe only when the
+predicate is recognized as pure and side-effect-free, because `forall` normally
+preserves arbitrary predicate side effects.
+
 ## Remaining hotspots
 
 After the loop change, allocation, request-head `StringBuilder` construction,
