@@ -1,9 +1,15 @@
 amends "https://sake92.github.io/deder/config/v0.22.2/DederProject.pkl"
 
+repositories {
+  new MavenRepository { url = "https://central.sonatype.com/repository/maven-snapshots/" }
+}
+
 local const publishRepo = if (read?("env:DEDER_PUBLISH_SNAPSHOT") == "true")
   new SonatypeSnapshotRepo { id = "sonatype" }
 else
   new SonatypeCentralRepo { id = "sonatype" }
+
+local const nativeVersion = read?("env:POTATEH_SCALA_NATIVE_VERSION") ?? "0.5.12"
 
 local const core = new CreateCrossModules {
   root = "potateh"
@@ -40,7 +46,7 @@ local const core = new CreateCrossModules {
     testParallelism = 1
   }
   nativeTemplate = (template.asNative()) {
-    scalaNativeVersion = "0.5.12"
+    scalaNativeVersion = nativeVersion
     multithreading = true
   }
   nativeTestTemplate = (nativeTemplate.asTest()) {
@@ -61,10 +67,21 @@ local const fixture: ScalaModule = new {
 }
 local const nativeFixture = (fixture.asNative()) {
   id = "fixture-native"
-  scalaNativeVersion = "0.5.12"
+  scalaNativeVersion = nativeVersion
   multithreading = true
   mode = "release-fast"
   moduleDeps = new Listing { core.native }
+}
+
+local const microBenchmarks = (fixture.asNative()) {
+  id = "micro-benchmarks"
+  root = "microbenchmarks"
+  sources = new Listing { "src" }
+  scalaNativeVersion = nativeVersion
+  multithreading = true
+  mode = "release-fast"
+  moduleDeps = new Listing { core.native }
+  mainClass = "ba.sake.potateh.RequestHeadBenchmark"
 }
 
 modules {
@@ -74,4 +91,5 @@ modules {
   core.native_test
   fixture
   nativeFixture
+  microBenchmarks
 }
