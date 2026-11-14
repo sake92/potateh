@@ -295,8 +295,9 @@ final class ServerConfig private (
     copy(backlog = value)
   }
 
-  /** Reports exchange failures synchronously on the connection worker. May run concurrently. Keep this callback short;
-    * nonfatal exceptions from it are ignored.
+  /** Reports application and cleanup failures synchronously on the connection worker. Transport disconnects and
+    * response send/flush failures are treated as connection closure instead. May run concurrently. Keep this callback
+    * short; nonfatal exceptions from it are ignored.
     */
   def withOnError(value: Throwable => Unit): ServerConfig = {
     copy(onError = value)

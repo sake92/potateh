@@ -24,11 +24,30 @@ private[potateh] final class Exchange(
   private var activeRequest: Option[Request] = None
   private var committed = false
   private var failure: Option[IOException] = None
+  private var transportFailure: Option[IOException] = None
   private var live = true
   private var continued = false
   private var expectContinue = false
   private val headers = Headers.from(head.headers)
   private val limits = config.limits
+  private val transport = new OutputStream {
+    override def write(value: Int): Unit = {
+      try output.write(value)
+      catch { case error: IOException => record(error) }
+    }
+    override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
+      try output.write(bytes, offset, length)
+      catch { case error: IOException => record(error) }
+    }
+    override def flush(): Unit = {
+      try output.flush()
+      catch { case error: IOException => record(error) }
+    }
+    private def record(error: IOException): Nothing = {
+      transportFailure = Some(error)
+      throw error
+    }
+  }
   private val framed: InputStream = head.framing match {
     case RequestHeadParser.NoBody              => new FixedLengthInputStream(input, 0)
     case RequestHeadParser.FixedLength(length) =>
@@ -128,10 +147,12 @@ private[potateh] final class Exchange(
     try process()
     catch {
       case NonFatal(error) =>
-        try config.onError(error)
-        catch { case NonFatal(_) => () }
-        try reject(500)
-        catch { case NonFatal(_) => () }
+        if (!transportFailure.contains(error)) {
+          try config.onError(error)
+          catch { case NonFatal(_) => () }
+          try reject(500)
+          catch { case NonFatal(_) => () }
+        }
         false
     } finally {
       live = false
@@ -194,10 +215,10 @@ private[potateh] final class Exchange(
       !persistent || !complete
     )
     committed = true
-    output.write(prepared.bytes)
-    ResponseHeadWriter.writeBody(output, response.body, prepared.framing)
+    transport.write(prepared.bytes)
+    ResponseHeadWriter.writeBody(transport, response.body, prepared.framing)
     failure.foreach(throw _)
-    output.flush()
+    transport.flush()
     persistent && !prepared.closes && complete
   }
 
@@ -207,8 +228,8 @@ private[potateh] final class Exchange(
         ResponseHeadWriter.prepare("GET", head.version, Response(code), true)
       }
       committed = true
-      output.write(prepared.bytes)
-      output.flush()
+      transport.write(prepared.bytes)
+      transport.flush()
     }
   }
 

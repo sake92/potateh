@@ -53,13 +53,15 @@ still consume the request body. If the body is incomplete when response headers
 are sent, the response signals connection closure, even if the writer finishes
 reading it. Unread bodies are not drained; terminal framing failures also prevent
 reuse.
-Exceptions caught during an exchange are reported through `ServerConfig.onError`
-(default: print the stack trace to stderr). Reporting runs synchronously on the
-connection worker and may run concurrently across connections. Nonfatal reporter
-exceptions are ignored. Before commitment, exchange failure produces a 500 unless
-a body-read failure already selected a protocol error; after commitment it closes
-the connection without a second response. Parser errors and failures outside the
-exchange are not delivered to this callback.
+Application and cleanup exceptions caught during an exchange are reported through
+`ServerConfig.onError` (default: print the stack trace to stderr). Transport
+disconnects and response send/flush failures are ordinary connection closure and
+are not reported. Reporting runs synchronously on the connection worker and may
+run concurrently across connections. Nonfatal reporter exceptions are ignored.
+Before commitment, exchange failure produces a 500 unless a body-read failure
+already selected a protocol error; after commitment it closes the connection
+without a second response. Parser errors and failures outside the exchange are
+not delivered to this callback.
 
 `Server.stop()` stops admission, closes idle/head-reading connections, allows
 active exchanges the configured shutdown grace, then closes remaining sockets.

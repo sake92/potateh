@@ -93,7 +93,13 @@ class ResponseLifecycleTest extends munit.FunSuite {
         assert(!Files.exists(upload))
         assertEquals(writerCalled, scenario.writes)
         val failed = scenario.name.endsWith("failure") || scenario.name == "disconnect"
-        assertEquals(errors.size, if (failed) 1 else 0)
+        val reportable = Set(
+          "handler failure",
+          "construction failure",
+          "preparation failure",
+          "writer failure"
+        )
+        assertEquals(errors.size, if (reportable.contains(scenario.name)) 1 else 0)
         assertEquals(reusable, !failed)
         if (!failed) assert(flushCalled)
         if (scenario.name == "success") assert(output.toByteArray.takeRight(payload.length).sameElements(payload))
