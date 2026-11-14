@@ -30,24 +30,30 @@ private[potateh] final class Exchange(
   private var expectContinue = false
   private val headers = Headers.from(head.headers)
   private val limits = config.limits
-  private val transport = new OutputStream {
+
+  private final class TransportOutput extends OutputStream {
     override def write(value: Int): Unit = {
       try output.write(value)
       catch { case error: IOException => record(error) }
     }
+
     override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
       try output.write(bytes, offset, length)
       catch { case error: IOException => record(error) }
     }
+
     override def flush(): Unit = {
       try output.flush()
       catch { case error: IOException => record(error) }
     }
+
     private def record(error: IOException): Nothing = {
       transportFailure = Some(error)
       throw error
     }
   }
+
+  private val transport = new TransportOutput()
   private val framed: InputStream = head.framing match {
     case RequestHeadParser.NoBody              => new FixedLengthInputStream(input, 0)
     case RequestHeadParser.FixedLength(length) =>

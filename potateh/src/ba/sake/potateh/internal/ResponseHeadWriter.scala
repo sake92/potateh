@@ -150,57 +150,10 @@ private[potateh] object ResponseHeadWriter {
     val stream = framing match {
       case FixedLength(size) => new FixedLengthOutputStream(output, size)
       case Chunked           => new ChunkedOutputStream(output)
-      case CloseDelimited    =>
-        new OutputStream {
-          private var closed = false
-          override def write(value: Int): Unit = {
-            check()
-            output.write(value)
-          }
-          override def write(
-              bytes: Array[Byte],
-              offset: Int,
-              length: Int
-          ): Unit = {
-            check()
-            output.write(bytes, offset, length)
-          }
-          override def flush(): Unit = {
-            check()
-            output.flush()
-          }
-          override def close(): Unit = {
-            closed = true
-            output.flush()
-          }
-          private def check(): Unit = {
-            if (closed) throw new java.io.IOException("Response body is closed")
-          }
-        }
-      case NoBody => throw new IllegalStateException()
+      case CloseDelimited    => new CloseDelimitedOutputStream(output)
+      case NoBody            => throw new IllegalStateException()
     }
-    var live = true
-    val scoped = new OutputStream {
-      private def check(): Unit = if (!live) {
-        throw new java.io.IOException("Response body escaped its exchange")
-      }
-      override def write(value: Int): Unit = {
-        check()
-        stream.write(value)
-      }
-      override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
-        check()
-        stream.write(bytes, offset, length)
-      }
-      override def flush(): Unit = {
-        check()
-        stream.flush()
-      }
-      override def close(): Unit = {
-        check()
-        stream.close()
-      }
-    }
+    val scoped = new ScopedResponseBodyOutput(stream)
     // Only successful writers finalize framing. A failing chunked writer must
     // not emit a terminating chunk that would make a partial response complete.
     try {
@@ -210,7 +163,67 @@ private[potateh] object ResponseHeadWriter {
         case writer: ResponseBody.Writer => writer.write(scoped)
       }
       stream.close()
-    } finally live = false
+    } finally scoped.deactivate()
+  }
+
+  private final class CloseDelimitedOutputStream(output: OutputStream) extends OutputStream {
+    private var closed = false
+
+    override def write(value: Int): Unit = {
+      checkWritable()
+      output.write(value)
+    }
+
+    override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
+      checkWritable()
+      output.write(bytes, offset, length)
+    }
+
+    override def flush(): Unit = {
+      checkWritable()
+      output.flush()
+    }
+
+    override def close(): Unit = {
+      closed = true
+      output.flush()
+    }
+
+    private def checkWritable(): Unit = {
+      if (closed) throw new java.io.IOException("Response body is closed")
+    }
+  }
+
+  private final class ScopedResponseBodyOutput(stream: OutputStream) extends OutputStream {
+    private var live = true
+
+    private inline def checkLive(): Unit = {
+      if (!live) throw new java.io.IOException("Response body escaped its exchange")
+    }
+
+    inline def deactivate(): Unit = {
+      live = false
+    }
+
+    override def write(value: Int): Unit = {
+      checkLive()
+      stream.write(value)
+    }
+
+    override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = {
+      checkLive()
+      stream.write(bytes, offset, length)
+    }
+
+    override def flush(): Unit = {
+      checkLive()
+      stream.flush()
+    }
+
+    override def close(): Unit = {
+      checkLive()
+      stream.close()
+    }
   }
 
   private def currentHttpDate(): String = {
