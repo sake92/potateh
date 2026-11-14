@@ -10,7 +10,7 @@ else
   new SonatypeCentralRepo { id = "sonatype" }
 
 local const nativeVersion =
-  read?("env:POTATEH_SCALA_NATIVE_VERSION") ?? "0.5.13-20261107-69432d9-SNAPSHOT"
+  read?("env:POTATEH_SCALA_NATIVE_VERSION") ?? "0.5.12"
 
 local const core = new CreateCrossModules {
   root = "potateh"
