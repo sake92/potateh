@@ -5,6 +5,11 @@ qualification. The target was Scala 3.9.0 and Scala Native with `release-fast`
 and LTO disabled. The server ran on CPUs 0-3 and h2load on CPUs 4-7. Raw output
 and benchmark helpers are intentionally not committed.
 
+The committed HTTP benchmark fixture is documented in
+[`benchmarks/http/README.md`](benchmarks/http/README.md). It uses `wrk` to
+measure keep-alive requests with a fixed worker count. Pipelined throughput must
+still be measured separately.
+
 ## 64-connection pipelined baseline
 
 Workload: HTTP/1.1, 64 connections, pipeline depth 16, `/pipeline`, three

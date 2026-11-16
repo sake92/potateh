@@ -85,6 +85,26 @@ local const microBenchmarks = (fixture.asNative()) {
   mainClass = "ba.sake.potateh.RequestHeadBenchmark"
 }
 
+local const httpBenchmark: ScalaModule = new {
+  id = "http-benchmark-jvm"
+  root = "benchmarks/http"
+  sources = new Listing { "src" }
+  scalaVersion = "3.9.0"
+  javaVersion = "21"
+  javaHome = read("env:JAVA_HOME")
+  scalacOptions { "-release:21" }
+  moduleDeps { core.jvm }
+  mainClass = "ba.sake.potateh.benchmark.HttpBenchmarkServer"
+}
+
+local const nativeHttpBenchmark = (httpBenchmark.asNative()) {
+  id = "http-benchmark-native"
+  scalaNativeVersion = nativeVersion
+  multithreading = true
+  mode = "release-fast"
+  moduleDeps = new Listing { core.native }
+}
+
 modules {
   core.jvm
   core.jvm_test
@@ -93,4 +113,6 @@ modules {
   fixture
   nativeFixture
   microBenchmarks
+  httpBenchmark
+  nativeHttpBenchmark
 }
