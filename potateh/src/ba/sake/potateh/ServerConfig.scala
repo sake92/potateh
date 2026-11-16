@@ -67,66 +67,6 @@ final class HttpLimits private (
     copy(maxBodyBytes = value)
   }
 
-  @deprecated("Use maxRequestLineBytes instead.", "next")
-  def requestLineBytes: Int = maxRequestLineBytes
-
-  @deprecated("Use withMaxRequestLineBytes instead.", "next")
-  def withRequestLineBytes(value: Int): HttpLimits = withMaxRequestLineBytes(value)
-
-  @deprecated("Use maxHeaderLineBytes instead.", "next")
-  def headerLineBytes: Int = maxHeaderLineBytes
-
-  @deprecated("Use withMaxHeaderLineBytes instead.", "next")
-  def withHeaderLineBytes(value: Int): HttpLimits = withMaxHeaderLineBytes(value)
-
-  @deprecated("Use maxHeaderSectionBytes instead.", "next")
-  def headerSectionBytes: Int = maxHeaderSectionBytes
-
-  @deprecated("Use withMaxHeaderSectionBytes instead.", "next")
-  def withHeaderSectionBytes(value: Int): HttpLimits = withMaxHeaderSectionBytes(value)
-
-  @deprecated("Use maxHeaderCount instead.", "next")
-  def headerCount: Int = maxHeaderCount
-
-  @deprecated("Use withMaxHeaderCount instead.", "next")
-  def withHeaderCount(value: Int): HttpLimits = withMaxHeaderCount(value)
-
-  @deprecated("Use maxChunkLineBytes instead.", "next")
-  def chunkLineBytes: Int = maxChunkLineBytes
-
-  @deprecated("Use withMaxChunkLineBytes instead.", "next")
-  def withChunkLineBytes(value: Int): HttpLimits = withMaxChunkLineBytes(value)
-
-  @deprecated("Use maxChunkExtensionBytes instead.", "next")
-  def chunkExtensionBytes: Int = maxChunkExtensionBytes
-
-  @deprecated("Use withMaxChunkExtensionBytes instead.", "next")
-  def withChunkExtensionBytes(value: Int): HttpLimits = withMaxChunkExtensionBytes(value)
-
-  @deprecated("Use maxTrailerLineBytes instead.", "next")
-  def trailerLineBytes: Int = maxTrailerLineBytes
-
-  @deprecated("Use withMaxTrailerLineBytes instead.", "next")
-  def withTrailerLineBytes(value: Int): HttpLimits = withMaxTrailerLineBytes(value)
-
-  @deprecated("Use maxTrailerSectionBytes instead.", "next")
-  def trailerSectionBytes: Int = maxTrailerSectionBytes
-
-  @deprecated("Use withMaxTrailerSectionBytes instead.", "next")
-  def withTrailerSectionBytes(value: Int): HttpLimits = withMaxTrailerSectionBytes(value)
-
-  @deprecated("Use maxTrailerCount instead.", "next")
-  def trailerCount: Int = maxTrailerCount
-
-  @deprecated("Use withMaxTrailerCount instead.", "next")
-  def withTrailerCount(value: Int): HttpLimits = withMaxTrailerCount(value)
-
-  @deprecated("Use maxBodyBytes instead.", "next")
-  def bodyBytes: Option[Long] = maxBodyBytes
-
-  @deprecated("Use withMaxBodyBytes instead.", "next")
-  def withBodyBytes(value: Option[Long]): HttpLimits = withMaxBodyBytes(value)
-
   private def copy(
       maxRequestLineBytes: Int = this.maxRequestLineBytes,
       maxHeaderLineBytes: Int = this.maxHeaderLineBytes,
@@ -217,30 +157,6 @@ final class HttpTimeouts private (
   def withShutdownGrace(value: FiniteDuration): HttpTimeouts = {
     copy(shutdownGrace = value)
   }
-
-  @deprecated("Use idleTimeout instead.", "next")
-  def idle: FiniteDuration = idleTimeout
-
-  @deprecated("Use withIdleTimeout instead.", "next")
-  def withIdle(value: FiniteDuration): HttpTimeouts = withIdleTimeout(value)
-
-  @deprecated("Use requestHeadTimeout instead.", "next")
-  def head: FiniteDuration = requestHeadTimeout
-
-  @deprecated("Use withRequestHeadTimeout instead.", "next")
-  def withHead(value: FiniteDuration): HttpTimeouts = withRequestHeadTimeout(value)
-
-  @deprecated("Use bodyReadTimeout instead.", "next")
-  def bodyRead: FiniteDuration = bodyReadTimeout
-
-  @deprecated("Use withBodyReadTimeout instead.", "next")
-  def withBodyRead(value: FiniteDuration): HttpTimeouts = withBodyReadTimeout(value)
-
-  @deprecated("Use writeTimeout instead.", "next")
-  def write: FiniteDuration = writeTimeout
-
-  @deprecated("Use withWriteTimeout instead.", "next")
-  def withWrite(value: FiniteDuration): HttpTimeouts = withWriteTimeout(value)
 
   private def copy(
       idleTimeout: FiniteDuration = this.idleTimeout,

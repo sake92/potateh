@@ -48,14 +48,14 @@ class ModelTest extends munit.FunSuite {
       ("bodyReadTimeout", timeouts.withBodyReadTimeout)
     )
     cases.foreach { case (name, update) =>
-      for (invalid <- List(-1.nanosecond, Duration.Zero, Int.MaxValue.toLong.millis + 1.nanosecond)) {
+      for (invalid <- List((-1).nanosecond, Duration.Zero, Int.MaxValue.toLong.millis + 1.nanosecond)) {
         val expected = s"requirement failed: $name must be positive and at most 2147483647 milliseconds (was $invalid)"
         interceptMessage[IllegalArgumentException](expected)(update(invalid))
       }
       update(1.nanosecond)
       update(Int.MaxValue.toLong.millis)
     }
-    for (invalid <- List(-1.nanosecond, Int.MaxValue.toLong.millis + 1.nanosecond)) {
+    for (invalid <- List((-1).nanosecond, Int.MaxValue.toLong.millis + 1.nanosecond)) {
       val expected = {
         s"requirement failed: writeTimeout must be nonnegative and at most 2147483647 milliseconds (was $invalid)"
       }
@@ -64,7 +64,7 @@ class ModelTest extends munit.FunSuite {
     assertEquals(timeouts.withWriteTimeout(Duration.Zero).writeTimeout, Duration.Zero)
     assertEquals(timeouts.withWriteTimeout(1.nanosecond).writeTimeout, 1.nanosecond)
     assertEquals(timeouts.withWriteTimeout(Int.MaxValue.toLong.millis).writeTimeout, Int.MaxValue.toLong.millis)
-    for (invalid <- List(-1.nanosecond, 1.day + 1.nanosecond)) {
+    for (invalid <- List((-1).nanosecond, 1.day + 1.nanosecond)) {
       val expected = s"requirement failed: shutdownGrace must be between zero and one day (was $invalid)"
       interceptMessage[IllegalArgumentException](expected)(timeouts.withShutdownGrace(invalid))
     }
