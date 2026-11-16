@@ -2,10 +2,10 @@ package ba.sake.potateh.internal
 
 import java.io.{BufferedOutputStream, IOException}
 import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{Executor, Executors, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, Executor, Executors, RejectedExecutionException, TimeUnit}
 
-import scala.collection.mutable
 import scala.util.boundary
 import scala.util.control.NonFatal
 
@@ -27,28 +27,34 @@ private[potateh] final class BlockingServer(
     lazy val remoteAddress: InetSocketAddress = {
       socket.getRemoteSocketAddress().asInstanceOf[InetSocketAddress]
     }
-    var active = {
-      false // guarded by lifecycle, including idle/head -> exchange handover
+    private val phaseState = new AtomicReference(ConnectionPhase.Queued)
+    @volatile var owner: Thread = null
+
+    def phase: ConnectionPhase = phaseState.get()
+
+    def transition(expected: ConnectionPhase, next: ConnectionPhase): Boolean = {
+      phaseState.compareAndSet(expected, next)
     }
-    var thread: Option[Thread] = None // guarded by lifecycle
+
+    def closePhase(): Unit = phaseState.set(ConnectionPhase.Closed)
 
     override def run(): Unit = {
-      val admitted = withLifecycle {
-        if (state != State.Running || !connections.contains(this)) false
-        else {
-          thread = Some(Thread.currentThread())
-          true
-        }
-      }
+      owner = Thread.currentThread()
+      val admitted = transition(ConnectionPhase.Queued, ConnectionPhase.Idle) && running
       if (admitted) {
         try serve(this)
         finally {
-          withLifecycle {
-            thread = None
-            connections -= this
-            lifecycleChanged.signalAll()
-          }
+          closePhase()
+          removeConnection(this)
+          owner = null
+          signalLifecycle()
         }
+      } else {
+        closePhase()
+        removeConnection(this)
+        close(socket)
+        owner = null
+        signalLifecycle()
       }
     }
 
@@ -56,11 +62,14 @@ private[potateh] final class BlockingServer(
 
   private enum State { case Running, Stopping, Stopped }
 
+  private enum ConnectionPhase { case Queued, Idle, Active, Closed }
+
   private val lifecycle = new ReentrantLock
   private val lifecycleChanged = lifecycle.newCondition()
-  private var state = State.Running
-  private var stopOwner: Option[Thread] = None
-  private val connections = mutable.Set.empty[Connection]
+  @volatile private var state = State.Running
+  private var stopOwner: Thread = null
+  private val connections = ConcurrentHashMap.newKeySet[Connection]()
+  private val connectionCount = new AtomicInteger
 
   private val (executor, ownedExecutor) = suppliedExecutor match {
     case Some(value) => (executor = value, ownedExecutor = None)
@@ -99,7 +108,7 @@ private[potateh] final class BlockingServer(
       }
       if (state == State.Stopping) {
         // A worker must return to let an existing stop caller finish its exchange.
-        if (connections.exists(_.thread.contains(self)) || stopOwner.contains(self)) {
+        if (anyConnection(_.owner == self) || stopOwner == self) {
           if (interrupted) self.interrupt()
           break()
         }
@@ -111,25 +120,33 @@ private[potateh] final class BlockingServer(
         break()
       }
       state = State.Stopping
-      stopOwner = Some(self)
+      stopOwner = self
       closeListener()
-      connections.filterNot(_.active).foreach(c => close(c.socket))
-      // Disable queued tasks even if they remain in a caller's executor.
-      connections.filterInPlace(_.thread.nonEmpty)
+      foreachConnection { connection =>
+        val queued = connection.transition(ConnectionPhase.Queued, ConnectionPhase.Closed)
+        val idle = connection.transition(ConnectionPhase.Idle, ConnectionPhase.Closed)
+        if (queued || idle) {
+          close(connection.socket)
+          if (queued) removeConnection(connection)
+        }
+      }
       lifecycleChanged.signalAll()
       (
         deadline = System.nanoTime() + config.timeouts.shutdownGrace.toNanos,
-        fromConnection = connections.exists(_.thread.contains(self))
+        fromConnection = anyConnection(_.owner == self)
       )
     }
     try {
       ownedExecutor.foreach(_.shutdown())
       withLifecycle {
-        while (connections.exists(c => c.active && !c.thread.contains(self)) && deadline - System.nanoTime() > 0) {
+        while (
+          anyConnection(c => c.phase == ConnectionPhase.Active && c.owner != self) &&
+          deadline - System.nanoTime() > 0
+        ) {
           try lifecycleChanged.awaitNanos(deadline - System.nanoTime())
           catch { case _: InterruptedException => interrupted = true }
         }
-        connections.foreach(c => close(c.socket))
+        foreachConnection(c => close(c.socket))
       }
       writes.foreach(_.stop())
       ownedExecutor match {
@@ -146,7 +163,7 @@ private[potateh] final class BlockingServer(
           // Shared executors stay open; callback stop must exclude its own task.
           withLifecycle {
             while (
-              connections.exists(c => c.thread.exists(_ ne self)) &&
+              anyConnection(c => c.owner != null && c.owner != self) &&
               deadline - System.nanoTime() > 0
             ) {
               try lifecycleChanged.awaitNanos(deadline - System.nanoTime())
@@ -164,7 +181,7 @@ private[potateh] final class BlockingServer(
     } finally {
       withLifecycle {
         state = State.Stopped
-        stopOwner = None
+        stopOwner = null
         lifecycleChanged.signalAll()
       }
       if (interrupted) self.interrupt()
@@ -178,17 +195,20 @@ private[potateh] final class BlockingServer(
     finally lifecycle.unlock()
   }
 
-  private def running: Boolean = withLifecycle(state == State.Running)
+  private def signalLifecycle(): Unit = withLifecycle(lifecycleChanged.signalAll())
+
+  private def running: Boolean = state == State.Running
 
   private def accept(): Unit = {
     try {
       while (running) {
         val socket = listener.accept()
         val admitted = withLifecycle {
-          if (state != State.Running || connections.size >= config.maxConnections) None
+          if (state != State.Running || connectionCount.get() >= config.maxConnections) None
           else {
             val connection = new Connection(socket)
-            connections += connection
+            connections.add(connection)
+            connectionCount.incrementAndGet()
             Some(connection)
           }
         }
@@ -201,7 +221,8 @@ private[potateh] final class BlockingServer(
               case error: Throwable =>
                 close(socket)
                 withLifecycle {
-                  connections -= connection
+                  connection.closePhase()
+                  removeConnection(connection)
                   lifecycleChanged.signalAll()
                 }
                 error match {
@@ -272,14 +293,15 @@ private[potateh] final class BlockingServer(
           head match {
             case None        => break()
             case Some(value) =>
-              val admitted = withLifecycle {
-                if (state != State.Running) false
-                else {
-                  connection.active = true
-                  true
+              val activated = connection.transition(ConnectionPhase.Idle, ConnectionPhase.Active)
+              val admitted = activated && running
+              if (!admitted) {
+                if (activated) {
+                  connection.transition(ConnectionPhase.Active, ConnectionPhase.Closed)
+                  signalLifecycle()
                 }
+                break()
               }
-              if (!admitted) break()
               try {
                 reuse = new Exchange(
                   socket,
@@ -292,10 +314,13 @@ private[potateh] final class BlockingServer(
                   handle
                 ).run()
               } finally {
-                withLifecycle {
-                  connection.active = false
-                  lifecycleChanged.signalAll()
+                val stopping = !running
+                val next = {
+                  if (stopping) ConnectionPhase.Closed
+                  else ConnectionPhase.Idle
                 }
+                connection.transition(ConnectionPhase.Active, next)
+                if (stopping) signalLifecycle()
               }
           }
         }
@@ -326,6 +351,27 @@ private[potateh] final class BlockingServer(
 
   private def close(socket: Socket): Unit = try socket.close()
   catch { case _: IOException => () }
+
+  private def removeConnection(connection: Connection): Unit = {
+    val removed = connections.remove(connection)
+    if (removed) connectionCount.decrementAndGet()
+  }
+
+  private def anyConnection(predicate: Connection => Boolean): Boolean = {
+    val iterator = connections.iterator()
+    var found = false
+    while (!found && iterator.hasNext()) {
+      found = predicate(iterator.next())
+    }
+    found
+  }
+
+  private def foreachConnection(operation: Connection => Unit): Unit = {
+    val iterator = connections.iterator()
+    while (iterator.hasNext()) {
+      operation(iterator.next())
+    }
+  }
 
   private def millis(nanos: Long): Long = {
     math.max(1L, (nanos + 999999L) / 1000000L)
