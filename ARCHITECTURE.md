@@ -46,6 +46,10 @@ waiting is outside the I/O timeout budget.
 The parser enforces an absolute request-head deadline; body reads use socket
 timeouts, while the optional scheduler bounds individual socket writes. Handler
 computation has no execution deadline.
+The normal request path reads a volatile server state and transitions the
+connection atomically between `Queued`, `Idle`, `Active` and `Closed`. The
+lifecycle mutex is used only for admission, shutdown transitions and waits, so
+request handling does not serialize through one server-wide lock.
 
 The exchange owns stream lifetimes and protocol decisions, including lazy
 `100 Continue`, bodyless responses and connection reuse. A response writer may
