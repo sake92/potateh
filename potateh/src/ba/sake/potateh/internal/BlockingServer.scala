@@ -78,8 +78,8 @@ private[potateh] final class BlockingServer(
       (executor = pool: Executor, ownedExecutor = Some(pool))
   }
 
-  private val writes = Option.when(config.timeouts.writeTimeout.toNanos > 0) {
-    new WriteTimeouts(config.timeouts.writeTimeout.toNanos)
+  private val writeDeadlines = Option.when(config.timeouts.writeTimeout.toNanos > 0) {
+    new WriteDeadlines(config.timeouts.writeTimeout.toNanos)
   }
   private val acceptThread = new Thread(() => accept(), "potateh-accept")
 
@@ -89,7 +89,6 @@ private[potateh] final class BlockingServer(
 
   def start(): Unit = {
     try {
-      writes.foreach(_.thread.start())
       acceptThread.start()
     } catch {
       case error: Throwable =>
@@ -148,7 +147,7 @@ private[potateh] final class BlockingServer(
         }
         foreachConnection(c => close(c.socket))
       }
-      writes.foreach(_.stop())
+      writeDeadlines.foreach(_.stop())
       ownedExecutor match {
         case Some(pool) if !fromConnection =>
           while (!pool.isTerminated && deadline - System.nanoTime() > 0) {
@@ -171,7 +170,7 @@ private[potateh] final class BlockingServer(
             }
           }
       }
-      val ownedThreads = Vector(acceptThread) ++ writes.toVector.map(_.thread)
+      val ownedThreads = Vector(acceptThread)
       ownedThreads.filterNot(_ eq self).foreach { thread =>
         while (thread.isAlive && deadline - System.nanoTime() > 0) {
           try thread.join(millis(deadline - System.nanoTime()))
@@ -247,9 +246,9 @@ private[potateh] final class BlockingServer(
       boundary {
         socket.setTcpNoDelay(true)
         val input = new ConnectionInput(socket, socket.getInputStream())
-        val socketOutput = writes match {
-          case Some(watcher) => watcher.output(socket)
-          case None          => socket.getOutputStream()
+        val socketOutput = writeDeadlines match {
+          case Some(deadlines) => deadlines.output(socket)
+          case None            => socket.getOutputStream()
         }
         val output = new BufferedOutputStream(socketOutput)
         var first = true

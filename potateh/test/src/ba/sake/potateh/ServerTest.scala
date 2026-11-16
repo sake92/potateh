@@ -1408,7 +1408,7 @@ class ServerTest extends munit.FunSuite {
     }
   }
   test(
-    "stop unblocks blocked writes and owns its watcher through termination"
+    "stop unblocks blocked writes and owns its write scheduler through termination"
   ) {
     val started = new CountDownLatch(1)
     val ended = new CountDownLatch(1)

@@ -24,8 +24,8 @@ flowchart TD
         Writer --> Output["FixedLengthOutputStream / ChunkedOutputStream<br/>or connection-delimited output"]
         Output --> Socket["Buffered socket output"]
         Socket -->|"response bytes"| Client
-        Engine --> Watcher["WriteTimeouts<br/>one watcher thread when enabled"]
-        Watcher -.->|"close socket on expired write"| Socket
+        Engine --> Deadlines["WriteDeadlines<br/>one optional scheduler"]
+        Deadlines -.->|"close socket on expired write"| Socket
         Exchange -->|"complete body and persistence allow reuse"| Worker
     end
 ```
@@ -44,8 +44,8 @@ The listener backlog is a separate OS queue, configured with `withBacklog`
 The initial head deadline starts when a connection task begins; executor queue
 waiting is outside the I/O timeout budget.
 The parser enforces an absolute request-head deadline; body reads use socket
-timeouts, while the watcher bounds socket writes. Handler computation has no
-execution deadline.
+timeouts, while the optional scheduler bounds individual socket writes. Handler
+computation has no execution deadline.
 
 The exchange owns stream lifetimes and protocol decisions, including lazy
 `100 Continue`, bodyless responses and connection reuse. A response writer may
