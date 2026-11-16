@@ -113,8 +113,8 @@ req/s and candidate median was 194,833 req/s. The same fixed 16-worker shape at
 64 connections was also effectively flat.
 
 At 64 workers, 64 connections, and pipeline depth 16 with 16 `gcannon` threads,
-median throughput increased from 281.9k to 323.7k req/s, about 14.8%. The
-candidate's three runs were 332.0k, 323.7k and 316.5k req/s. This supports
+median throughput increased from 281.9k to 341.8k req/s, about 21.3%. The
+candidate's three runs were 356.2k, 341.8k and 327.8k req/s. This supports
 removing lifecycle locks from the request path specifically when requests have
 more concurrency, not under a lightly loaded non-pipelined fixture.
 
