@@ -2,17 +2,32 @@
 set -euo pipefail
 
 server_bin=${SERVER_BIN:?Set SERVER_BIN to a built HTTP benchmark server}
-wrk_threads=${WRK_THREADS:-16}
-connections=${CONNECTIONS:-$wrk_threads}
-worker_threads=${POTATEH_THREADS:-$wrk_threads}
+load_tool=${LOAD_TOOL:-wrk}
+load_threads=${LOAD_THREADS:-${WRK_THREADS:-16}}
+connections=${CONNECTIONS:-$load_threads}
+worker_threads=${POTATEH_THREADS:-$load_threads}
 duration=${DURATION:-10s}
 runs=${RUNS:-3}
 path=${PATH_SUFFIX:-/pipeline}
+pipeline=${PIPELINE:-16}
 server_cpus=${SERVER_CPUS:-}
-wrk_cpus=${WRK_CPUS:-}
+load_cpus=${LOAD_CPUS:-${WRK_CPUS:-}}
 
-if ! command -v wrk >/dev/null 2>&1; then
-  echo "wrk is required" >&2
+case "${load_tool}" in
+  wrk)
+    load_bin=${WRK_BIN:-wrk}
+    ;;
+  gcannon)
+    load_bin=${GCANNON_BIN:-gcannon}
+    ;;
+  *)
+    echo "LOAD_TOOL must be wrk or gcannon" >&2
+    exit 1
+    ;;
+esac
+
+if ! command -v "${load_bin}" >/dev/null 2>&1; then
+  echo "${load_tool} is required (set ${load_tool^^}_BIN if needed)" >&2
   exit 1
 fi
 
@@ -21,13 +36,13 @@ server_log="$work_dir/server.log"
 stop_file="$work_dir/stop"
 server_pid=
 server_command=("${server_bin}")
-wrk_command=(wrk)
+load_command=("${load_bin}")
 
 if [[ -n "${server_cpus}" ]]; then
   server_command=(taskset -c "${server_cpus}" "${server_bin}")
 fi
-if [[ -n "${wrk_cpus}" ]]; then
-  wrk_command=(taskset -c "${wrk_cpus}" wrk)
+if [[ -n "${load_cpus}" ]]; then
+  load_command=(taskset -c "${load_cpus}" "${load_bin}")
 fi
 
 cleanup() {
@@ -68,13 +83,24 @@ if [[ -z "${port}" ]]; then
 fi
 
 head -n 1 "${server_log}"
-echo "wrk threads=${wrk_threads} connections=${connections} duration=${duration} runs=${runs}"
+echo "${load_tool} threads=${load_threads} connections=${connections} duration=${duration} runs=${runs}"
 
 for run in $(seq 1 "${runs}"); do
   echo "=== run ${run}/${runs} ==="
-  "${wrk_command[@]}" -t "${wrk_threads}" \
-    -c "${connections}" \
-    -d "${duration}" \
-    --latency \
-    "http://127.0.0.1:${port}${path}"
+  case "${load_tool}" in
+    wrk)
+      "${load_command[@]}" -t "${load_threads}" \
+        -c "${connections}" \
+        -d "${duration}" \
+        --latency \
+        "http://127.0.0.1:${port}${path}"
+      ;;
+    gcannon)
+      "${load_command[@]}" "http://127.0.0.1:${port}${path}" \
+        -c "${connections}" \
+        -t "${load_threads}" \
+        -d "${duration}" \
+        -p "${pipeline}"
+      ;;
+  esac
 done

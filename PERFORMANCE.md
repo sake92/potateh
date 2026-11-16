@@ -6,9 +6,9 @@ and LTO disabled. The server ran on CPUs 0-3 and h2load on CPUs 4-7. Raw output
 and benchmark helpers are intentionally not committed.
 
 The committed HTTP benchmark fixture is documented in
-[`benchmarks/http/README.md`](benchmarks/http/README.md). It uses `wrk` to
-measure keep-alive requests with a fixed worker count. Pipelined throughput must
-still be measured separately.
+[`benchmarks/http/README.md`](benchmarks/http/README.md). It uses `wrk` for
+keep-alive requests and can use `gcannon` for pipelined requests with a fixed
+worker count.
 
 ## 64-connection pipelined baseline
 
@@ -100,6 +100,28 @@ A Scalafix rule could flag generic character traversals such as `forall`,
 should come before autofixes. An automatic rewrite is safe only when the
 predicate is recognized as pure and side-effect-free, because `forall` normally
 preserves arbitrary predicate side effects.
+
+## Lifecycle state
+
+On 2026-11-16, alternating baseline and candidate processes ran on CPUs 0-3,
+with the load generator on CPUs 4-7. Each measurement used Scala Native
+`release-fast`, fresh server processes, and three paired runs.
+
+A fixed 16-worker `wrk` workload with 16 load-generator threads and 16
+keep-alive connections showed no material change: baseline median was 194,989
+req/s and candidate median was 194,833 req/s. The same fixed 16-worker shape at
+64 connections was also effectively flat.
+
+At 64 workers, 64 connections, and pipeline depth 16 with 16 `gcannon` threads,
+median throughput increased from 281.9k to 323.7k req/s, about 14.8%. The
+candidate's three runs were 332.0k, 323.7k and 316.5k req/s. This supports
+removing lifecycle locks from the request path specifically when requests have
+more concurrency, not under a lightly loaded non-pipelined fixture.
+
+A blocking `ServerSocketChannel` experiment was rejected because Scala Native
+0.5.12 does not provide the required `java.nio.channels` implementations. The
+shared JVM/Native server retains `ServerSocket`; channels would require
+platform-specific listener code before they could be evaluated.
 
 ## Remaining hotspots
 
