@@ -3,7 +3,7 @@
 These are local, directional measurements from 2026-11-13, not release
 qualification. The target was Scala 3.9.0 and Scala Native with `release-fast`
 and LTO disabled. The server ran on CPUs 0-3 and h2load on CPUs 4-7. Raw output
-and benchmark helpers are intentionally not committed.
+is intentionally not committed; the reusable benchmark fixture is.
 
 The committed HTTP benchmark fixture is documented in
 [`benchmarks/http/README.md`](benchmarks/http/README.md). It uses `wrk` for

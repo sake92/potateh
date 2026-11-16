@@ -313,13 +313,11 @@ private[potateh] final class BlockingServer(
                   handle
                 ).run()
               } finally {
-                val stopping = !running
-                val next = {
-                  if (stopping) ConnectionPhase.Closed
-                  else ConnectionPhase.Idle
+                connection.transition(ConnectionPhase.Active, ConnectionPhase.Idle)
+                if (!running) {
+                  connection.transition(ConnectionPhase.Idle, ConnectionPhase.Closed)
+                  signalLifecycle()
                 }
-                connection.transition(ConnectionPhase.Active, next)
-                if (stopping) signalLifecycle()
               }
           }
         }
