@@ -123,6 +123,35 @@ A blocking `ServerSocketChannel` experiment was rejected because Scala Native
 shared JVM/Native server retains `ServerSocket`; channels would require
 platform-specific listener code before they could be evaluated.
 
+## Virtual threads
+
+On 2026-11-16, the JVM benchmark fixture used Temurin 21.0.10 with the server on
+CPUs 0-3 and `wrk` on CPUs 4-7. Each entry ran three 8-second passes against one
+fresh JVM; the table uses the median. The virtual executor started one virtual
+thread per admitted connection. No requests were pipelined.
+
+| Connections | Executor | Requests/s |
+| ---: | --- | ---: |
+| 4 | fixed, 4 threads | 201.6k |
+| 4 | virtual | 118.2k |
+| 16 | fixed, 16 threads | 260.4k |
+| 16 | cached platform threads | 250.4k |
+| 16 | virtual | 189.2k |
+| 64 | fixed, 64 threads | 266.0k |
+| 64 | virtual | 199.7k |
+
+Virtual threads did not increase request throughput for this CPU-bound handler;
+they were 22-27% slower at 16 and 64 connections. A separate 1,024-connection
+idle keep-alive measurement showed the intended advantage: cached platform
+threads settled at 1,050 OS threads and 212 MiB RSS, while virtual threads used
+36 OS threads and 85 MiB RSS.
+
+A short profile recording had 17 virtual-thread starts for 16 connections, no
+`jdk.VirtualThreadPinned` events, and no `jdk.JavaMonitor*` events. The sampled
+hot method was the JDK virtual-thread scheduler's transfer-queue wait. That
+points to scheduler handoff cost in the always-ready request loop, not lifecycle
+lock pinning.
+
 ## Remaining hotspots
 
 After the loop change, allocation, request-head `StringBuilder` construction,

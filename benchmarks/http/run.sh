@@ -6,6 +6,7 @@ load_tool=${LOAD_TOOL:-wrk}
 load_threads=${LOAD_THREADS:-${WRK_THREADS:-16}}
 connections=${CONNECTIONS:-$load_threads}
 worker_threads=${POTATEH_THREADS:-$load_threads}
+executor=${POTATEH_EXECUTOR:-fixed}
 duration=${DURATION:-10s}
 runs=${RUNS:-3}
 path=${PATH_SUFFIX:-/pipeline}
@@ -35,11 +36,15 @@ work_dir=$(mktemp -d)
 server_log="$work_dir/server.log"
 stop_file="$work_dir/stop"
 server_pid=
-server_command=("${server_bin}")
+if [[ "${server_bin}" == *.jar ]]; then
+  server_command=("${JAVA_BIN:-java}" -jar "${server_bin}")
+else
+  server_command=("${server_bin}")
+fi
 load_command=("${load_bin}")
 
 if [[ -n "${server_cpus}" ]]; then
-  server_command=(taskset -c "${server_cpus}" "${server_bin}")
+  server_command=(taskset -c "${server_cpus}" "${server_command[@]}")
 fi
 if [[ -n "${load_cpus}" ]]; then
   load_command=(taskset -c "${load_cpus}" "${load_bin}")
@@ -58,6 +63,7 @@ trap cleanup EXIT
 
 POTATEH_PORT=0 \
 POTATEH_THREADS="${worker_threads}" \
+POTATEH_EXECUTOR="${executor}" \
 POTATEH_MAX_CONNECTIONS="${connections}" \
 POTATEH_STOP_FILE="${stop_file}" \
   "${server_command[@]}" >"${server_log}" 2>&1 &

@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets.US_ASCII
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 
 import ba.sake.potateh.*
 
@@ -15,6 +15,7 @@ object HttpBenchmarkServer {
     val workers = intEnv("POTATEH_THREADS", 16)
     val maxConnections = intEnv("POTATEH_MAX_CONNECTIONS", workers)
     val backlog = intEnv("POTATEH_BACKLOG", maxConnections)
+    val executorKind = sys.env.getOrElse("POTATEH_EXECUTOR", "fixed")
     val stopFile = Paths.get(sys.env("POTATEH_STOP_FILE"))
     require(!Files.exists(stopFile), s"Stop file already exists: $stopFile")
 
@@ -22,10 +23,20 @@ object HttpBenchmarkServer {
       .withBindAddress(new InetSocketAddress("127.0.0.1", port))
       .withMaxConnections(maxConnections)
       .withBacklog(backlog)
-    val executor = Executors.newFixedThreadPool(
-      workers,
-      task => new Thread(task, "potateh-benchmark-worker")
-    )
+    val executor: ExecutorService = executorKind match {
+      case "fixed" =>
+        Executors.newFixedThreadPool(
+          workers,
+          task => new Thread(task, "potateh-benchmark-worker")
+        )
+      case "cached" =>
+        Executors.newCachedThreadPool(task => new Thread(task, "potateh-benchmark-worker"))
+      case "virtual" => Executors.newVirtualThreadPerTaskExecutor()
+      case value     =>
+        throw new IllegalArgumentException(
+          s"POTATEH_EXECUTOR must be fixed, cached or virtual (was $value)"
+        )
+    }
     val ok = Response(
       headers = Headers("Content-Type" -> "text/plain"),
       body = ResponseBody.bytes("ok".getBytes(US_ASCII))
@@ -53,7 +64,7 @@ object HttpBenchmarkServer {
     Runtime.getRuntime.addShutdownHook(hook)
     try {
       println(
-        s"LISTENING ${server.address.getPort} workers=$workers " +
+        s"LISTENING ${server.address.getPort} executor=$executorKind workers=$workers " +
           s"maxConnections=$maxConnections backlog=$backlog"
       )
       System.out.flush()
