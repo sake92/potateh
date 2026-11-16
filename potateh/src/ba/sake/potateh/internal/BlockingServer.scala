@@ -1,6 +1,6 @@
 package ba.sake.potateh.internal
 
-import java.io.{BufferedOutputStream, IOException}
+import java.io.{BufferedOutputStream, IOException, OutputStream}
 import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
@@ -57,6 +57,12 @@ private[potateh] final class BlockingServer(
   private enum State { case Running, Stopping, Stopped }
 
   private enum ConnectionPhase { case Queued, Idle, Active, Closed }
+
+  private final class ConnectionOutput(output: OutputStream) extends BufferedOutputStream(output) {
+    def flushIfPending(): Unit = {
+      if (count > 0) flush()
+    }
+  }
 
   private val lifecycle = new ReentrantLock
   private val lifecycleChanged = lifecycle.newCondition()
@@ -236,15 +242,20 @@ private[potateh] final class BlockingServer(
 
   private def serve(connection: Connection): Unit = {
     val socket = connection.socket
+    val socketOutput = writeDeadlines match {
+      case Some(deadlines) => deadlines.output(socket)
+      case None            => socket.getOutputStream()
+    }
+    val output = new ConnectionOutput(socketOutput)
+    var flushOnExit = false
     try {
       boundary {
         socket.setTcpNoDelay(true)
-        val input = new ConnectionInput(socket, socket.getInputStream())
-        val socketOutput = writeDeadlines match {
-          case Some(deadlines) => deadlines.output(socket)
-          case None            => socket.getOutputStream()
-        }
-        val output = new BufferedOutputStream(socketOutput)
+        val input = new ConnectionInput(
+          socket,
+          socket.getInputStream(),
+          beforeBlockingRead = () => output.flushIfPending()
+        )
         var first = true
         var reuse = true
         while (reuse && running) {
@@ -301,9 +312,14 @@ private[potateh] final class BlockingServer(
                   output,
                   value,
                   config,
-                  handle
+                  handle,
+                  deferReusableFlush = true
                 ).run()
               } finally {
+                if (!running) {
+                  try output.flushIfPending()
+                  catch { case _: IOException => () }
+                }
                 connection.phase = ConnectionPhase.Idle
                 if (!running) {
                   connection.phase = ConnectionPhase.Closed
@@ -313,8 +329,13 @@ private[potateh] final class BlockingServer(
           }
         }
       }
+      flushOnExit = true
     } catch { case NonFatal(_) => () }
     finally {
+      if (flushOnExit) {
+        try output.flushIfPending()
+        catch { case _: IOException => () }
+      }
       close(socket)
     }
   }

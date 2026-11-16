@@ -152,6 +152,25 @@ hot method was the JDK virtual-thread scheduler's transfer-queue wait. That
 points to scheduler handoff cost in the always-ready request loop, not lifecycle
 lock pinning.
 
+## Deferred pipelined flush
+
+The JVM server now keeps a complete reusable response buffered until the next
+socket read would block. This batches pipelined responses without delaying a
+client that is waiting for its response.
+
+The HttpArena plain-Potateh entry used JDK 27, 512 connections, pipeline depth
+16, four `gcannon` threads, and three five-second runs. Alternating baseline and
+candidate runs produced:
+
+| Revision | Median | Runs |
+| --- | ---: | --- |
+| Per-exchange flush | 518.9k req/s | 470.0k, 518.9k, 530.7k |
+| Blocking-read flush | 1.517M req/s | 1.398M, 1.517M, 1.692M |
+
+Median pipelined throughput increased by about 2.9x. A preceding candidate run
+measured 1.620M req/s as its median. Nonpipelined baseline throughput remained
+around 250k req/s.
+
 ## Remaining hotspots
 
 After the loop change, allocation, request-head `StringBuilder` construction,

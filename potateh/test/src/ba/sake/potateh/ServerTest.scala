@@ -423,6 +423,41 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("buffered responses flush before waiting for a partial next head") {
+    withServer()(_ => response("first")) { server =>
+      withSocket(server) { socket =>
+        send(socket, get() + "GE")
+        assertEquals(receive(socket).body, "first")
+        send(
+          socket,
+          "T /second HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+        )
+        assertEquals(receive(socket).body, "first")
+        closed(socket)
+      }
+    }
+  }
+  test("buffered responses flush before waiting for a pipelined request body") {
+    withServer() { request =>
+      if (request.target == "/first") response("first")
+      else {
+        val body = new ByteArrayOutputStream
+        request.body.transferTo(body)
+        response(new String(body.toByteArray, ISO_8859_1))
+      }
+    } { server =>
+      withSocket(server) { socket =>
+        send(
+          socket,
+          get("/first") +
+            "POST /second HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\n\r\nab"
+        )
+        assertEquals(receive(socket).body, "first")
+        send(socket, "cd")
+        assertEquals(receive(socket).body, "abcd")
+      }
+    }
+  }
   test("connection options tolerate bounded empty elements across fields") {
     val calls = new AtomicInteger
     withServer() { _ =>

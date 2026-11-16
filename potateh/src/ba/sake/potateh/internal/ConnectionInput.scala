@@ -6,8 +6,12 @@ import java.net.{Socket, SocketTimeoutException}
 /** Buffers connection reads so request-head parsing does not perform one socket read and two clock reads per byte.
   * Bytes read ahead remain available to the request body and subsequent pipelined requests.
   */
-private[potateh] final class ConnectionInput(socket: Socket, source: InputStream, capacity: Int = 8192)
-    extends InputStream {
+private[potateh] final class ConnectionInput(
+    socket: Socket,
+    source: InputStream,
+    capacity: Int = 8192,
+    beforeBlockingRead: () => Unit = () => ()
+) extends InputStream {
   require(capacity > 0)
 
   private val buffer = new Array[Byte](capacity)
@@ -48,7 +52,10 @@ private[potateh] final class ConnectionInput(socket: Socket, source: InputStream
       System.arraycopy(buffer, position, bytes, offset, count)
       position += count
       count
-    } else source.read(bytes, offset, length)
+    } else {
+      beforeBlockingRead()
+      source.read(bytes, offset, length)
+    }
   }
 
   override def skip(count: Long): Long = {
@@ -57,7 +64,10 @@ private[potateh] final class ConnectionInput(socket: Socket, source: InputStream
       val skipped = math.min(count, (limit - position).toLong)
       position += skipped.toInt
       skipped
-    } else source.skip(count)
+    } else {
+      beforeBlockingRead()
+      source.skip(count)
+    }
   }
 
   override def available(): Int = {
@@ -71,6 +81,7 @@ private[potateh] final class ConnectionInput(socket: Socket, source: InputStream
     if (position < limit) true
     else {
       checkDeadline()
+      beforeBlockingRead()
       val count = source.read(buffer, 0, buffer.length)
       if (count < 0) false
       else if (count == 0) ensureBuffered()

@@ -19,7 +19,8 @@ private[potateh] final class Exchange(
     output: OutputStream,
     head: RequestHeadParser.RequestHead,
     config: ServerConfig,
-    handle: Request => Response
+    handle: Request => Response,
+    deferReusableFlush: Boolean = false
 ) {
   private var activeRequest: Option[Request] = None
   private var committed = false
@@ -224,8 +225,9 @@ private[potateh] final class Exchange(
     transport.write(prepared.bytes)
     ResponseHeadWriter.writeBody(transport, response.body, prepared.framing)
     failure.foreach(throw _)
-    transport.flush()
-    persistent && !prepared.closes && complete
+    val keepOpen = persistent && !prepared.closes && complete
+    if (!keepOpen || !deferReusableFlush) transport.flush()
+    keepOpen
   }
 
   private def reject(code: Int): Unit = {
