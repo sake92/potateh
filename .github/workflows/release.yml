@@ -39,8 +39,7 @@ jobs:
           java-version: '21'
       - name: Install Deder
         run: |
-          curl -fsSL https://github.com/sake92/deder/releases/download/v0.22.2/deder-client-linux-x86_64 -o "$RUNNER_TEMP/deder"
-          chmod +x "$RUNNER_TEMP/deder"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          brew tap sake92/tap
+          brew install deder
       - name: Publish to Maven Central
         run: deder exec -t publish
