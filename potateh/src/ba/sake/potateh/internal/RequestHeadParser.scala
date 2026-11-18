@@ -66,17 +66,8 @@ private[potateh] object RequestHeadParser {
     }
     val method = line.substring(0, firstSpace)
     val target = line.substring(firstSpace + 1, lastSpace)
-    val suppliedVersion = line.substring(lastSpace + 1)
     if (!isTokenName(method)) fail(400, "Invalid method")
-    if (
-      suppliedVersion.length != 8 || !suppliedVersion.startsWith("HTTP/") ||
-      suppliedVersion.charAt(5) < '0' || suppliedVersion.charAt(5) > '9' ||
-      suppliedVersion.charAt(6) != '.' || suppliedVersion.charAt(7) < '0' || suppliedVersion.charAt(7) > '9'
-    ) {
-      fail(400, "Invalid HTTP version")
-    }
-    if (suppliedVersion.charAt(5) != '1') fail(505, "Unsupported HTTP version")
-    val version = if (suppliedVersion == "HTTP/1.0") "HTTP/1.0" else "HTTP/1.1"
+    val version = parseVersion(line.substring(lastSpace + 1))
     RequestTargetValidation.validateTarget(method, target)
 
     val fields = Vector.newBuilder[(name: String, value: String)]
@@ -121,6 +112,18 @@ private[potateh] object RequestHeadParser {
     if (hostCount == 1) RequestTargetValidation.validateHost(host)
     val framing = selectFraming(contentLength, contentLengthCount, transferEncodings, version)
     Some(RequestHead(method, target, version, headers, framing))
+  }
+
+  private def parseVersion(suppliedVersion: String): String = {
+    if (
+      suppliedVersion.length != 8 || !suppliedVersion.startsWith("HTTP/") ||
+      suppliedVersion.charAt(5) < '0' || suppliedVersion.charAt(5) > '9' ||
+      suppliedVersion.charAt(6) != '.' || suppliedVersion.charAt(7) < '0' || suppliedVersion.charAt(7) > '9'
+    ) {
+      fail(400, "Invalid HTTP version")
+    }
+    if (suppliedVersion.charAt(5) != '1') fail(505, "Unsupported HTTP version")
+    if (suppliedVersion == "HTTP/1.0") "HTTP/1.0" else "HTTP/1.1"
   }
 
   private def readLine(
