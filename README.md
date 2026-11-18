@@ -10,7 +10,7 @@ parsing, body framing and connection management.
 - Bounded connections, configurable size limits and I/O timeouts.
 - Persistent connections, ordered pipelining and graceful shutdown.
 
-Routing, authentication, TLS, HTTP/2 and WebSockets belong outside this core.
+Routing, authentication, HTTP/2 and WebSockets belong outside this core.
 
 ## Installation
 
@@ -58,6 +58,22 @@ val config = ServerConfig.Default
 ```
 
 Pass `config` to `Server.start(config)` in the example above.
+
+On the JVM, supply an initialized `javax.net.ssl.SSLContext` with a server
+certificate to enable TLS:
+
+```scala
+val config = ServerConfig.Default.withServerSocketFactory(() =>
+  sslContext.getServerSocketFactory.createServerSocket()
+)
+```
+
+The factory must return a fresh, unbound socket; the server binds and owns it.
+TLS availability depends on the platform and provider; Scala Native does not
+provide a built-in `SSLContext` implementation. Configure the context and its
+certificate and trust settings in the application. The server speaks HTTP/1
+only, so do not configure TLS ALPN to negotiate HTTP/2. TLS handshakes run on
+connection workers and socket read timeouts apply to handshake reads.
 
 | Setting | Default |
 | --- | --- |

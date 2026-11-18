@@ -1,6 +1,6 @@
 package ba.sake.potateh
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, ServerSocket}
 
 import scala.concurrent.duration.*
 
@@ -192,7 +192,8 @@ final class ServerConfig private (
     val backlog: Int,
     val onError: Throwable => Unit,
     val limits: HttpLimits,
-    val timeouts: HttpTimeouts
+    val timeouts: HttpTimeouts,
+    val serverSocketFactory: () => ServerSocket
 ) {
   require(!bindAddress.isUnresolved, "Unresolved bind address")
   require(maxConnections > 0, "maxConnections must be positive")
@@ -227,13 +228,20 @@ final class ServerConfig private (
     copy(timeouts = value)
   }
 
+  /** Creates an unbound listener owned and closed by the server. */
+  def withServerSocketFactory(value: () => ServerSocket): ServerConfig = {
+    require(value != null, "serverSocketFactory must not be null")
+    copy(serverSocketFactory = value)
+  }
+
   private def copy(
       bindAddress: InetSocketAddress = this.bindAddress,
       maxConnections: Int = this.maxConnections,
       backlog: Int = this.backlog,
       onError: Throwable => Unit = this.onError,
       limits: HttpLimits = this.limits,
-      timeouts: HttpTimeouts = this.timeouts
+      timeouts: HttpTimeouts = this.timeouts,
+      serverSocketFactory: () => ServerSocket = this.serverSocketFactory
   ): ServerConfig = {
     new ServerConfig(
       bindAddress,
@@ -241,7 +249,8 @@ final class ServerConfig private (
       backlog,
       onError,
       limits,
-      timeouts
+      timeouts,
+      serverSocketFactory
     )
   }
 
@@ -254,6 +263,7 @@ object ServerConfig {
     backlog = 128,
     onError = _.printStackTrace(),
     limits = HttpLimits.Default,
-    timeouts = HttpTimeouts.Default
+    timeouts = HttpTimeouts.Default,
+    serverSocketFactory = () => new ServerSocket()
   )
 }

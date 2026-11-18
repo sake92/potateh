@@ -76,8 +76,10 @@ executor remains caller-owned and usable after the server stops.
 Applications own when to call it; there is no automatic shutdown hook.
 
 The public API is in `potateh/src/ba/sake/potateh`; connection, exchange and codec
-implementation details are in its `internal` package. Routing, authentication,
-TLS and application formats belong outside this core.
+implementation details are in its `internal` package. Applications may supply an
+unbound TLS server socket through the listener factory; TLS configuration and
+certificates belong to the application. Routing, authentication and application
+formats belong outside this core.
 
 ## Public API evolution
 

@@ -1,6 +1,6 @@
 package ba.sake.potateh
 
-import java.net.{InetSocketAddress, ServerSocket}
+import java.net.InetSocketAddress
 import java.util.concurrent.Executor
 
 /** A running server. Stopping is terminal and uses the configured grace budget.
@@ -33,7 +33,7 @@ object Server {
       executor: Option[Executor],
       handle: Request => Response
   ): Server = {
-    val socket = new ServerSocket()
+    val socket = config.serverSocketFactory()
     try {
       socket.setReuseAddress(true)
       socket.bind(config.bindAddress, config.backlog)
