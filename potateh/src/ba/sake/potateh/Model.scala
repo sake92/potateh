@@ -22,6 +22,26 @@ final class Request private (
     private val completion: internal.ResponseCompletion
 ) {
 
+  /** Raw URI path, without percent-decoding. Absent for asterisk and CONNECT authority targets. An absolute target
+    * without a path has an empty path. Manually constructed requests must have a valid target.
+    */
+  def rawPath: Option[String] = targetComponents.rawPath
+
+  /** Raw query without the question mark, preserving the distinction between absent and empty. */
+  def rawQuery: Option[String] = targetComponents.rawQuery
+
+  private lazy val targetComponents: (rawPath: Option[String], rawQuery: Option[String]) = {
+    if (target == "*" || method == "CONNECT") (rawPath = None, rawQuery = None)
+    else if (target.startsWith("/")) {
+      val separator = target.indexOf('?')
+      if (separator < 0) (rawPath = Some(target), rawQuery = None)
+      else (rawPath = Some(target.substring(0, separator)), rawQuery = Some(target.substring(separator + 1)))
+    } else {
+      val uri = java.net.URI.create(target)
+      (rawPath = Option(uri.getRawPath), rawQuery = Option(uri.getRawQuery))
+    }
+  }
+
   /** Registers cleanup on the connection worker after response processing, including failures and skipped bodies.
     * Register during the handler or body writer. Each registration runs once, in registration order, after output
     * flushing (or its failure). Nonfatal cleanup failures are reported through ServerConfig.onError and do not skip

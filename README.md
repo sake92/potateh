@@ -106,7 +106,9 @@ handler or response writer. The server manages HTTP framing and connection
 headers. If the request body is incomplete when the handler returns, the server
 signals connection closure, even if the response writer finishes reading it.
 
-The request exposes the raw target and received headers. For an absolute
+The request exposes the raw target, its undecoded `rawPath` and `rawQuery` components,
+and received headers. Both components are absent for asterisk and CONNECT authority
+targets; an empty query is distinct from an absent query. For an absolute
 request target, applications routing by authority must use the target URI's
 authority instead of the `Host` header. Applications are responsible for
 status-specific headers, such as `WWW-Authenticate` for a 401 response. A 426

@@ -5,6 +5,24 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration.*
 
 class ModelTest extends munit.FunSuite {
+  test("request target components retain raw paths and distinguish absent and empty queries") {
+    val request = Request("GET", "/", HttpVersion.Http11, Headers.empty, null, null, null)
+    val cases = List(
+      ("GET", "//a/%2F?x=%26?y", Some("//a/%2F"), Some("x=%26?y")),
+      ("GET", "/path", Some("/path"), None),
+      ("GET", "/path?", Some("/path"), Some("")),
+      ("GET", "http://example.com/a%2Fb?q=%20", Some("/a%2Fb"), Some("q=%20")),
+      ("GET", "http://example.com?", Some(""), Some("")),
+      ("OPTIONS", "*", None, None),
+      ("CONNECT", "example.com:443", None, None)
+    )
+    cases.foreach { case (method, target, path, query) =>
+      val updated = request.withMethod(method).withTarget(target)
+      assertEquals(updated.rawPath, path, target)
+      assertEquals(updated.rawQuery, query, target)
+    }
+    assertEquals(request.rawPath, Some("/"))
+  }
   test("limits report individual invalid fields in updates") {
     val limits = HttpLimits.Default
     val cases = List[(name: String, minimum: Int, update: Int => HttpLimits)](
