@@ -41,52 +41,14 @@ private[potateh] object ResponseHeadWriter {
       close: Boolean
   ): Prepared = {
     val status = response.status
-    require(
-      status >= 200 && status <= 599,
-      "Callback must return a final response"
-    )
-    require(
-      method != "CONNECT" || status < 200 || status >= 300,
-      "Tunnels are unsupported"
-    )
-    var hasDate = false
-    response.headers.fields.foreach { case (key, _) =>
-      val managed = isEngineManagedHeader(key)
-      require(
-        !managed || (status == 426 && key.length == 7 && HttpSyntax.equalsIgnoreCaseAscii(key, "Upgrade")),
-        "Engine owns framing and connection headers"
-      )
-      if (!hasDate && key.length == 4 && HttpSyntax.equalsIgnoreCaseAscii(key, "Date")) hasDate = true
-    }
-    if (status == 426) {
-      val protocols = HttpSyntax.listElements(response.headers.all("Upgrade")).getOrElse(Vector.empty)
-      require(
-        protocols.nonEmpty && protocols.forall { protocol =>
-          val slash = protocol.indexOf('/')
-          val name = if (slash < 0) protocol else protocol.substring(0, slash)
-          val version = if (slash < 0) None else Some(protocol.substring(slash + 1))
-          HttpSyntax.isTokenName(name) &&
-          version.forall(HttpSyntax.isTokenName)
-        },
-        "426 requires valid Upgrade protocols"
-      )
-    }
+    val hasDate = validateResponse(method, response)
     val forbidden = status == 204
     val metadata = method == "HEAD" || status == 304
     val size = {
       if (metadata && response.body == ResponseBody.Empty) None
       else length(response.body)
     }
-    val framing = {
-      if (forbidden || metadata || status == 205) NoBody
-      else {
-        size match {
-          case Some(value)                   => FixedLength(value)
-          case None if version == "HTTP/1.1" => Chunked
-          case None                          => CloseDelimited
-        }
-      }
-    }
+    val framing = selectFraming(forbidden, metadata, status, size, version)
     val closes = close || framing == CloseDelimited
     val head = new HeadBytes()
     head.appendAscii(version)
@@ -128,6 +90,58 @@ private[potateh] object ResponseHeadWriter {
     }
     head.appendAscii("\r\n")
     Prepared(head.result(), framing, closes)
+  }
+
+  private def validateResponse(method: String, response: Response): Boolean = {
+    val status = response.status
+    require(
+      status >= 200 && status <= 599,
+      "Callback must return a final response"
+    )
+    require(
+      method != "CONNECT" || status < 200 || status >= 300,
+      "Tunnels are unsupported"
+    )
+    var hasDate = false
+    response.headers.fields.foreach { case (key, _) =>
+      val managed = isEngineManagedHeader(key)
+      require(
+        !managed || (status == 426 && key.length == 7 && HttpSyntax.equalsIgnoreCaseAscii(key, "Upgrade")),
+        "Engine owns framing and connection headers"
+      )
+      if (!hasDate && key.length == 4 && HttpSyntax.equalsIgnoreCaseAscii(key, "Date")) hasDate = true
+    }
+    if (status == 426) {
+      val protocols = HttpSyntax.listElements(response.headers.all("Upgrade")).getOrElse(Vector.empty)
+      require(
+        protocols.nonEmpty && protocols.forall { protocol =>
+          val slash = protocol.indexOf('/')
+          val name = if (slash < 0) protocol else protocol.substring(0, slash)
+          val version = if (slash < 0) None else Some(protocol.substring(slash + 1))
+          HttpSyntax.isTokenName(name) &&
+          version.forall(HttpSyntax.isTokenName)
+        },
+        "426 requires valid Upgrade protocols"
+      )
+    }
+    hasDate
+  }
+
+  private def selectFraming(
+      forbidden: Boolean,
+      metadata: Boolean,
+      status: Int,
+      size: Option[Long],
+      version: String
+  ): Framing = {
+    if (forbidden || metadata || status == 205) NoBody
+    else {
+      size match {
+        case Some(value)                   => FixedLength(value)
+        case None if version == "HTTP/1.1" => Chunked
+        case None                          => CloseDelimited
+      }
+    }
   }
 
   def writeBody(

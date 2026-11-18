@@ -165,22 +165,7 @@ private[potateh] final class ChunkedInputStream(
         index = skipOws(line, equals + 1)
         if (index == line.length) invalid("Missing chunk extension value")
         if (line.charAt(index) == '"') {
-          index += 1
-          var ended = false
-          while (index < line.length && !ended) {
-            val character = line.charAt(index)
-            index += 1
-            if (character == '"') ended = true
-            else if (character == '\\') {
-              if (index == line.length || !quotedCharacter(line.charAt(index))) {
-                invalid("Invalid quoted escape")
-              }
-              index += 1
-            } else if (!quotedCharacter(character)) {
-              invalid("Invalid quoted extension")
-            }
-          }
-          if (!ended) invalid("Unterminated quoted extension")
+          index = skipQuotedExtension(line, index + 1)
         } else {
           val valueStart = index
           while (index < line.length && HttpSyntax.isToken(line.charAt(index))) {
@@ -190,6 +175,26 @@ private[potateh] final class ChunkedInputStream(
         }
       }
     }
+  }
+
+  private def skipQuotedExtension(line: String, start: Int): Int = {
+    var index = start
+    var ended = false
+    while (index < line.length && !ended) {
+      val character = line.charAt(index)
+      index += 1
+      if (character == '"') ended = true
+      else if (character == '\\') {
+        if (index == line.length || !quotedCharacter(line.charAt(index))) {
+          invalid("Invalid quoted escape")
+        }
+        index += 1
+      } else if (!quotedCharacter(character)) {
+        invalid("Invalid quoted extension")
+      }
+    }
+    if (!ended) invalid("Unterminated quoted extension")
+    index
   }
 
   private def readTrailers(): Unit = {
