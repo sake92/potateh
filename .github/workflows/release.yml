@@ -37,9 +37,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
       - name: Install Deder
-        run: |
-          brew tap sake92/tap
-          brew install deder
+        run: brew install sake92/tap/deder
       - name: Publish to Maven Central
         run: deder exec -t publish

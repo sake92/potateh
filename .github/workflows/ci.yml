@@ -28,9 +28,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - run: |
-          brew tap sake92/tap
-          brew install deder
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+      - name: Install Deder
+        run: brew install sake92/tap/deder
       - run: deder exec -t runMvnApp fmtCheck
       - name: Check versions
         id: version
@@ -72,9 +73,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
       - name: Install Deder
-        run: |
-          brew tap sake92/tap
-          brew install deder
+        run: brew install sake92/tap/deder
       - name: Publish snapshots
         run: deder exec -t publish
