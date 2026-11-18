@@ -42,7 +42,7 @@ object HttpBenchmarkServer {
       body = ResponseBody.bytes("ok".getBytes(US_ASCII))
     )
     val server = try {
-      Server.start(config, executor)(_ => ok)
+      Server.start(config.withExecutor(executor))(_ => ok)
     } catch {
       case error: Throwable =>
         executor.shutdownNow()

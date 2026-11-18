@@ -32,7 +32,7 @@ flowchart TD
 
 Connections can run concurrently; exchanges on each connection run sequentially.
 The default executor uses a cached platform-thread pool with no task queue.
-`Server.start(config, executor)(handle)` accepts a caller-owned executor, including
+`Server.start(config.withExecutor(executor))(handle)` accepts a caller-owned executor, including
 a JVM virtual-thread executor. Queued and running connections both count toward
 `maxConnections`; excess connections and rejected submissions are closed.
 Supplied executors must execute tasks or reject by throwing, rather than silently

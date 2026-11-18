@@ -198,7 +198,7 @@ class ServerTest extends munit.FunSuite {
       }
       pool.execute(task)
     }
-    val server = Server.start(config.withMaxConnections(1), executor)(_ => response("ok"))
+    val server = Server.start(config.withMaxConnections(1).withExecutor(executor))(_ => response("ok"))
     try {
       withSocket(server) { socket =>
         connected.countDown()
@@ -233,7 +233,7 @@ class ServerTest extends munit.FunSuite {
       pool.execute(task)
       submitted.countDown()
     }
-    val server = Server.start(config.withMaxConnections(1), executor) { _ =>
+    val server = Server.start(config.withMaxConnections(1).withExecutor(executor)) { _ =>
       calls.incrementAndGet()
       response("unexpected")
     }
@@ -267,7 +267,7 @@ class ServerTest extends munit.FunSuite {
     val pool = Executors.newSingleThreadExecutor()
     val entered = new CountDownLatch(1)
     val release = new CountDownLatch(1)
-    val server = Server.start(config, pool) { _ =>
+    val server = Server.start(config.withExecutor(pool)) { _ =>
       entered.countDown()
       await(release)
       response("ok")
@@ -308,7 +308,7 @@ class ServerTest extends munit.FunSuite {
       val proceed = new CountDownLatch(1)
       val returned = new CountDownLatch(1)
       val ref = new AtomicReference[Server]
-      val server = Server.start(config, pool) { _ =>
+      val server = Server.start(config.withExecutor(pool)) { _ =>
         entered.countDown()
         await(proceed)
         ref.get().stop()
@@ -350,7 +350,7 @@ class ServerTest extends munit.FunSuite {
     val settings = config.withTimeouts(
       config.timeouts.withBodyReadTimeout(10.seconds).withShutdownGrace(100.millis)
     )
-    val server = Server.start(settings, executor) { request =>
+    val server = Server.start(settings.withExecutor(executor)) { request =>
       entered.countDown()
       try request.body.read()
       finally ended.countDown()

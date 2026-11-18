@@ -10,7 +10,7 @@ class VirtualExecutorTest extends munit.FunSuite {
     val executor = Executors.newVirtualThreadPerTaskExecutor()
     val virtual = new AtomicBoolean
     val config = ServerConfig.Default.withBindAddress(new InetSocketAddress("127.0.0.1", 0))
-    val server = Server.start(config, executor) { _ =>
+    val server = Server.start(config.withExecutor(executor)) { _ =>
       virtual.set(Thread.currentThread().isVirtual)
       Response(body = ResponseBody.bytes("virtual".getBytes(US_ASCII)))
     }
@@ -45,7 +45,7 @@ class VirtualExecutorTest extends munit.FunSuite {
     val stopping = new CountDownLatch(2)
     val stopped = new CountDownLatch(2)
     val config = ServerConfig.Default.withBindAddress(new InetSocketAddress("127.0.0.1", 0))
-    val server = Server.start(config, executor) { _ =>
+    val server = Server.start(config.withExecutor(executor)) { _ =>
       entered.countDown()
       val released = release.await(3, TimeUnit.SECONDS)
       assert(released)

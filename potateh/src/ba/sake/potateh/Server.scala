@@ -1,7 +1,6 @@
 package ba.sake.potateh
 
 import java.net.InetSocketAddress
-import java.util.concurrent.Executor
 
 /** A running server. Stopping is terminal and uses the configured grace budget.
   */
@@ -18,27 +17,11 @@ object Server {
   def start(
       config: ServerConfig = ServerConfig.Default
   )(handle: Request => Response): Server = {
-    startServer(config, config.executor, handle)
-  }
-
-  /** The caller owns the executor. Each task serves an entire connection. Rejection must throw rather than silently
-    * discard tasks.
-    */
-  @deprecated("Use ServerConfig.withExecutor", "0.5.1")
-  def start(config: ServerConfig, executor: Executor)(
-      handle: Request => Response
-  ): Server = startServer(config, Some(executor), handle)
-
-  private def startServer(
-      config: ServerConfig,
-      executor: Option[Executor],
-      handle: Request => Response
-  ): Server = {
     val socket = config.serverSocketFactory()
     try {
       socket.setReuseAddress(true)
       socket.bind(config.bindAddress, config.backlog)
-      val engine = new internal.BlockingServer(socket, config, executor, handle)
+      val engine = new internal.BlockingServer(socket, config, config.executor, handle)
       engine.start()
       new Server(engine)
     } catch {

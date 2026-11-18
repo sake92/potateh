@@ -126,7 +126,7 @@ The default executor uses platform threads, with one worker per connection.
 Idle keep-alive connections retain a worker and a connection slot, so increasing
 `maxConnections` also increases potential thread and memory use.
 
-Use `Server.start(config, executor)(handle)` to supply an executor, including a
+Use `Server.start(config.withExecutor(executor))(handle)` to supply an executor, including a
 JVM virtual-thread executor. Queued connections count toward the connection
 limit, and a small fixed pool can be occupied entirely by idle connections.
 You own the supplied executor and must shut it down separately.
