@@ -1,11 +1,10 @@
 
-add some logging
+add some logging?
 https://index.scala-lang.org/outr/scribe
 
 - DRY, simplify
 
-# Planned improvements
-
+# Scala Native improvements
 - [ ] Replace the pinned Scala Native allocator snapshot with the stable 0.5.13
   release when available.
 - [ ] Add protocol upgrade support for a separate WebSocket implementation:
@@ -13,6 +12,8 @@ https://index.scala-lang.org/outr/scribe
   admission and shutdown ownership.
 - [ ] Track the Scala Native 0.5.12 TERM shutdown exception; see
   [known limitations](conformance/README.md#known-limitations).
+
+# Other
 - [ ] Discuss the empty-Host expectation disagreement with Http11Probe maintainers.
 - [ ] Add repeatable external-suite CI checks for JVM and Native.
 - [ ] Validate macOS and Windows behavior.

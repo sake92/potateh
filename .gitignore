@@ -10,3 +10,8 @@ hs_err_pid*
 .basamake/
 
 conformance/out/
+.worktrees/
+
+
+
+
