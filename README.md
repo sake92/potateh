@@ -58,6 +58,7 @@ val config = ServerConfig.Default
 ```
 
 Pass `config` to `Server.start(config)` in the example above.
+Use `config.withExecutor(executor)` to supply a caller-owned executor; each task serves one connection.
 
 On the JVM, supply an initialized `javax.net.ssl.SSLContext` with a server
 certificate to enable TLS:

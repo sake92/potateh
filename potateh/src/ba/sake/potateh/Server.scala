@@ -18,12 +18,13 @@ object Server {
   def start(
       config: ServerConfig = ServerConfig.Default
   )(handle: Request => Response): Server = {
-    startServer(config, None, handle)
+    startServer(config, config.executor, handle)
   }
 
   /** The caller owns the executor. Each task serves an entire connection. Rejection must throw rather than silently
     * discard tasks.
     */
+  @deprecated("Use ServerConfig.withExecutor", "0.5.1")
   def start(config: ServerConfig, executor: Executor)(
       handle: Request => Response
   ): Server = startServer(config, Some(executor), handle)

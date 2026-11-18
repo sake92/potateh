@@ -166,7 +166,7 @@ class ServerTest extends munit.FunSuite {
       worker.set(thread)
       thread
     })
-    val server = Server.start(config, pool) { _ =>
+    val server = Server.start(config.withExecutor(pool)) { _ =>
       assert(Thread.currentThread() eq worker.get())
       response("pooled")
     }

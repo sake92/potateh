@@ -1,6 +1,7 @@
 package ba.sake.potateh
 
 import java.net.{InetSocketAddress, ServerSocket}
+import java.util.concurrent.Executor
 
 import scala.concurrent.duration.*
 
@@ -193,7 +194,8 @@ final class ServerConfig private (
     val onError: Throwable => Unit,
     val limits: HttpLimits,
     val timeouts: HttpTimeouts,
-    val serverSocketFactory: () => ServerSocket
+    val serverSocketFactory: () => ServerSocket,
+    val executor: Option[Executor]
 ) {
   require(!bindAddress.isUnresolved, "Unresolved bind address")
   require(maxConnections > 0, "maxConnections must be positive")
@@ -234,6 +236,12 @@ final class ServerConfig private (
     copy(serverSocketFactory = value)
   }
 
+  /** The caller owns the executor; each task serves an entire connection. */
+  def withExecutor(value: Executor): ServerConfig = {
+    require(value != null, "executor must not be null")
+    copy(executor = Some(value))
+  }
+
   private def copy(
       bindAddress: InetSocketAddress = this.bindAddress,
       maxConnections: Int = this.maxConnections,
@@ -241,7 +249,8 @@ final class ServerConfig private (
       onError: Throwable => Unit = this.onError,
       limits: HttpLimits = this.limits,
       timeouts: HttpTimeouts = this.timeouts,
-      serverSocketFactory: () => ServerSocket = this.serverSocketFactory
+      serverSocketFactory: () => ServerSocket = this.serverSocketFactory,
+      executor: Option[Executor] = this.executor
   ): ServerConfig = {
     new ServerConfig(
       bindAddress,
@@ -250,7 +259,8 @@ final class ServerConfig private (
       onError,
       limits,
       timeouts,
-      serverSocketFactory
+      serverSocketFactory,
+      executor
     )
   }
 
@@ -264,6 +274,7 @@ object ServerConfig {
     onError = _.printStackTrace(),
     limits = HttpLimits.Default,
     timeouts = HttpTimeouts.Default,
-    serverSocketFactory = () => new ServerSocket()
+    serverSocketFactory = () => new ServerSocket(),
+    executor = None
   )
 }
