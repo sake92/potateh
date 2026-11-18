@@ -1,4 +1,4 @@
-amends "https://sake92.github.io/deder/config/v0.22.2/DederProject.pkl"
+amends "https://sake92.github.io/deder/config/v0.23.0/DederProject.pkl"
 
 repositories {
   new MavenRepository { url = "https://central.sonatype.com/repository/maven-snapshots/" }
@@ -9,8 +9,7 @@ local const publishRepo = if (read?("env:DEDER_PUBLISH_SNAPSHOT") == "true")
 else
   new SonatypeCentralRepo { id = "sonatype" }
 
-local const nativeVersion =
-  read?("env:POTATEH_SCALA_NATIVE_VERSION") ?? "0.5.12"
+local const nativeVersion ="0.5.12"
 
 local const core = new CreateCrossModules {
   root = "potateh"
