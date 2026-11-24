@@ -15,8 +15,15 @@ final class Headers private (val fields: Vector[(name: String, value: String)]) 
     case (key, value) if internal.HttpSyntax.equalsIgnoreCaseAscii(key, name) => value
   }
 
-  def all(name: String): Vector[String] = fields.collect {
-    case (key, value) if internal.HttpSyntax.equalsIgnoreCaseAscii(key, name) => value
+  def all(name: String): Vector[String] = {
+    var matches = Vector.empty[String]
+    var index = 0
+    while (index < fields.length) {
+      val field = fields(index)
+      if (internal.HttpSyntax.equalsIgnoreCaseAscii(field.name, name)) matches = matches :+ field.value
+      index += 1
+    }
+    matches
   }
 
   def add(name: String, value: String): Headers = {

@@ -7,8 +7,10 @@ import boundary.break
 private[potateh] object HttpSyntax {
 
   private val MaxEmptyListElements = 8
+  private val EmptyListElements = Some(Vector.empty[String])
 
   def listElements(values: Vector[String]): Option[Vector[String]] = boundary {
+    if (values.isEmpty) break(EmptyListElements)
     val elements = Vector.newBuilder[String]
     var empty = 0
     val iterator = values.iterator

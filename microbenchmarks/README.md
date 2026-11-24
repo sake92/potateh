@@ -14,3 +14,13 @@ deder shutdown
 ```
 
 To use a Scala Native snapshot, set `POTATEH_SCALA_NATIVE_VERSION` for the build command. Clean the affected Native modules when switching versions. Run on a quiet machine and compare results on the same hardware; on Linux, prefix the executable with `taskset -c 4` to pin it to a logical CPU. These simple microbenchmarks do not measure allocations or replace end-to-end HTTP measurements.
+
+## JVM header benchmarks
+
+From the repository root, run JMH with the GC profiler to measure time and bytes allocated per operation:
+
+```sh
+deder exec -t jmhRun -m header-jmh -- -bm avgt -tu ns -wi 2 -i 3 -w 500ms -r 500ms -f 2 -prof gc '.*HeaderBenchmark.*'
+```
+
+The benchmark measures case-insensitive lookup and list parsing separately for absent, single, and repeated fields. Fixture construction happens before measurement. Use the same JDK for before-and-after comparisons.

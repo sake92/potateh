@@ -1,5 +1,14 @@
 amends "https://sake92.github.io/deder/config/v0.23.0/DederProject.pkl"
 
+import "https://sake92.github.io/deder-plugins/config/deder-jmh/early-access/JmhPlugin.pkl" as Jmh
+
+plugins {
+  new Jmh.JmhPlugin {
+    version = "0.7.1-SNAPSHOT"
+    config { modules { ["header-jmh"] = new Jmh.ModuleOverride { enabled = true } } }
+  }
+}
+
 repositories {
   new MavenRepository { url = "https://central.sonatype.com/repository/maven-snapshots/" }
 }
@@ -112,6 +121,15 @@ modules {
   fixture
   nativeFixture
   microBenchmarks
+  new ScalaModule {
+    id = "header-jmh"
+    root = "microbenchmarks/jvm"
+    scalaVersion = core.jvm.scalaVersion
+    javaVersion = core.jvm.javaVersion
+    javaHome = read("env:JAVA_HOME")
+    moduleDeps { core.jvm }
+    deps { "org.openjdk.jmh:jmh-core:1.37" }
+  }
   httpBenchmark
   nativeHttpBenchmark
 }
