@@ -121,15 +121,6 @@ modules {
   fixture
   nativeFixture
   microBenchmarks
-  new ScalaModule {
-    id = "header-jmh"
-    root = "microbenchmarks/jvm"
-    scalaVersion = core.jvm.scalaVersion
-    javaVersion = core.jvm.javaVersion
-    javaHome = read("env:JAVA_HOME")
-    moduleDeps { core.jvm }
-    deps { "org.openjdk.jmh:jmh-core:1.37" }
-  }
   httpBenchmark
   nativeHttpBenchmark
 }
