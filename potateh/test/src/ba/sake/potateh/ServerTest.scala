@@ -423,6 +423,30 @@ class ServerTest extends munit.FunSuite {
       }
     }
   }
+  test("a completed fixed-length response reaches the client before the next handler returns") {
+    val entered = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+    withServer() { request =>
+      if (request.target == "/first") {
+        Response(body = ResponseBody.Writer(Some(5L))(out => out.write("first".getBytes(ISO_8859_1))))
+      } else {
+        entered.countDown()
+        assert(release.await(5, TimeUnit.SECONDS))
+        response("second")
+      }
+    } { server =>
+      withSocket(server) { socket =>
+        try {
+          send(socket, get("/first") + get("/second", fields = "Connection: close\r\n"))
+          assert(entered.await(2, TimeUnit.SECONDS))
+          assertEquals(receive(socket).body, "first")
+        } finally release.countDown()
+        assertEquals(receive(socket).body, "second")
+        closed(socket)
+      }
+    }
+  }
+
   test("buffered responses flush before waiting for a partial next head") {
     withServer()(_ => response("first")) { server =>
       withSocket(server) { socket =>

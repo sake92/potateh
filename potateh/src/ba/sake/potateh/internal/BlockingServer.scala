@@ -4,7 +4,14 @@ import java.io.{BufferedOutputStream, IOException, OutputStream}
 import java.net.{InetSocketAddress, ServerSocket, Socket, SocketTimeoutException}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{ConcurrentHashMap, Executor, Executors, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.{
+  ConcurrentHashMap,
+  Executor,
+  Executors,
+  RejectedExecutionException,
+  ScheduledFuture,
+  TimeUnit
+}
 
 import scala.jdk.CollectionConverters.*
 import scala.util.boundary
@@ -58,9 +65,53 @@ private[potateh] final class BlockingServer(
 
   private enum ConnectionPhase { case Queued, Idle, Active, Closed }
 
-  private final class ConnectionOutput(output: OutputStream) extends BufferedOutputStream(output) {
-    def flushIfPending(): Unit = {
+  private val flushScheduler = new FlushScheduler
+
+  private final class ConnectionOutput(output: OutputStream, socket: Socket) extends BufferedOutputStream(output) {
+    private var pending: ScheduledFuture[?] = null
+    private var generation = 0L
+
+    // Scala Native's BufferedOutputStream does not synchronize these operations.
+    override def write(value: Int): Unit = synchronized {
+      super.write(value)
+    }
+
+    override def write(bytes: Array[Byte], offset: Int, length: Int): Unit = synchronized {
+      super.write(bytes, offset, length)
+    }
+
+    override def flush(): Unit = synchronized {
+      super.flush()
+    }
+
+    def arm(): Unit = synchronized {
+      if (count > 0 && pending == null) {
+        val armedGeneration = generation
+        try pending = flushScheduler.schedule(() => flushIfCurrent(armedGeneration))
+        catch {
+          case _: RejectedExecutionException => flushIfPending()
+        }
+      }
+    }
+
+    private def flushIfCurrent(armedGeneration: Long): Unit = synchronized {
+      if (generation == armedGeneration) {
+        try flushIfPending()
+        catch { case _: IOException => BlockingServer.this.close(socket) }
+      }
+    }
+
+    def flushIfPending(): Unit = synchronized {
+      stopTimer()
       if (count > 0) flush()
+    }
+
+    def stopTimer(): Unit = synchronized {
+      if (pending != null) {
+        pending.cancel(false)
+        pending = null
+        generation += 1
+      }
     }
   }
 
@@ -147,6 +198,7 @@ private[potateh] final class BlockingServer(
         }
         connections.asScala.foreach(c => close(c.socket))
       }
+      flushScheduler.stop()
       writeDeadlines.foreach(_.stop())
       ownedExecutor match {
         case Some(pool) if !fromConnection =>
@@ -246,7 +298,7 @@ private[potateh] final class BlockingServer(
       case Some(deadlines) => deadlines.output(socket)
       case None            => socket.getOutputStream()
     }
-    val output = new ConnectionOutput(socketOutput)
+    val output = new ConnectionOutput(socketOutput, socket)
     var flushOnExit = false
     try {
       boundary {
@@ -304,6 +356,7 @@ private[potateh] final class BlockingServer(
                 break()
               }
               try {
+                output.arm()
                 reuse = new Exchange(
                   socket,
                   connection.localAddress,
@@ -337,6 +390,7 @@ private[potateh] final class BlockingServer(
         catch { case _: IOException => () }
       }
       close(socket)
+      output.stopTimer()
     }
   }
 

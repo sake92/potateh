@@ -223,7 +223,12 @@ private[potateh] final class Exchange(
     )
     committed = true
     transport.write(prepared.bytes)
-    ResponseHeadWriter.writeBody(transport, response.body, prepared.framing)
+    ResponseHeadWriter.writeBody(
+      transport,
+      response.body,
+      prepared.framing,
+      deferFixedLengthFlush = deferReusableFlush && persistent && !prepared.closes
+    )
     failure.foreach(throw _)
     val keepOpen = persistent && !prepared.closes && complete
     if (!keepOpen || !deferReusableFlush) transport.flush()

@@ -52,13 +52,17 @@ private[potateh] final class FixedLengthOutputStream(
     catch { case error: IOException => fail(error) }
   }
 
-  override def close(): Unit = boundary {
+  override def close(): Unit = finish(flushSink = true)
+
+  def finish(flushSink: Boolean): Unit = boundary {
     if (closed) break()
     closed = true
     failure.foreach(throw _)
     if (remaining != 0) fail(new IOException("Too few response body bytes"))
-    try output.flush()
-    catch { case error: IOException => fail(error) }
+    if (flushSink) {
+      try output.flush()
+      catch { case error: IOException => fail(error) }
+    }
   }
 
   private def checkWritable(): Unit = {

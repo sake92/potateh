@@ -147,7 +147,8 @@ private[potateh] object ResponseHeadWriter {
   def writeBody(
       output: OutputStream,
       body: ResponseBody,
-      framing: Framing
+      framing: Framing,
+      deferFixedLengthFlush: Boolean = false
   ): Unit = boundary {
     if (framing == NoBody) break()
     body match {
@@ -176,7 +177,10 @@ private[potateh] object ResponseHeadWriter {
         case bytes: ResponseBody.Bytes   => scoped.write(bytes.value)
         case writer: ResponseBody.Writer => writer.write(scoped)
       }
-      stream.close()
+      stream match {
+        case fixed: FixedLengthOutputStream if deferFixedLengthFlush => fixed.finish(flushSink = false)
+        case _                                                       => stream.close()
+      }
     } finally scoped.deactivate()
   }
 
