@@ -256,12 +256,11 @@ compression and conditional-response warnings describe application capabilities.
 Its `total` includes category-filtered skips: count executed cases as
 `total - skipped`, and inspect raw verdicts as well as scored summaries.
 
-An empty Host remains accepted. The probe's `COMP-HOST-EMPTY-VALUE` expects
-rejection, but [RFC 9112 section 3.2](https://www.rfc-editor.org/rfc/rfc9112.html#section-3.2)
-requires an empty Host when the target authority is missing or undefined, and
-requires rejection of missing, repeated or invalid Host fields. We interpret
-this as permitting the empty value rather than requiring blanket rejection.
-The disagreement remains a failed probe and a nonzero runner exit.
+HTTP/1.1 origin-form requests require a nonempty Host. Potateh has no
+configured default authority for these requests, so it rejects an empty
+authority as allowed by [RFC 9112 section 3.3](https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3).
+Absolute-form targets supply their own authority. Potateh accepts an explicitly
+empty Host field for asterisk-form OPTIONS and HTTP/1.0.
 
 Local results are recorded below. Remote CI and other operating systems require
 separate verification. These are bounded local diagnostics, not production

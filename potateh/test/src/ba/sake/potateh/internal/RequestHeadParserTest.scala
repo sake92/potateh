@@ -43,6 +43,13 @@ class RequestHeadParserTest extends munit.FunSuite {
     assertEquals(parse("OPTIONS * HTTP/1.1\r\nHost:\r\n\r\n").framing, NoBody)
   }
 
+  test("HTTP/1.1 origin-form requests require a nonempty Host") {
+    rejected("GET / HTTP/1.1\r\nHost:\r\n\r\n", 400)
+    rejected("GET /items?q=x HTTP/1.1\r\nHost: \t\r\n\r\n", 400)
+    val absolute = parse("GET http://example.org/items HTTP/1.1\r\nHost:\r\n\r\n")
+    assertEquals(absolute.target, "http://example.org/items")
+  }
+
   test("accepts registered names in Host and request target authorities") {
     for (host <- List("foo_bar", "%65xample.org", "a!$&'()*+,;=~b")) {
       assertEquals(parse(s"GET / HTTP/1.1\r\nHost: $host:8080\r\n\r\n").headers.head.value, s"$host:8080")
@@ -122,8 +129,7 @@ class RequestHeadParserTest extends munit.FunSuite {
       "a-b.example:65535",
       "foo_bar",
       "%65xample.org",
-      "[::1]:443",
-      ""
+      "[::1]:443"
     )
     accepted.foreach { host =>
       assertEquals(parse(s"GET / HTTP/1.1\r\nHost: $host\r\n\r\n").headers.head.value, host)

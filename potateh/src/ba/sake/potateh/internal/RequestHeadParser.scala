@@ -109,7 +109,12 @@ private[potateh] object RequestHeadParser {
     if (hostCount > 1 || (version == "HTTP/1.1" && hostCount == 0)) {
       fail(400, "Missing or repeated Host")
     }
-    if (hostCount == 1) RequestTargetValidation.validateHost(host)
+    if (hostCount == 1) {
+      if (host.isEmpty && version == "HTTP/1.1" && target.startsWith("/")) {
+        fail(400, "Empty Host for origin-form request")
+      }
+      RequestTargetValidation.validateHost(host)
+    }
     val framing = selectFraming(contentLength, contentLengthCount, transferEncodings, version)
     Some(RequestHead(method, target, version, headers, framing))
   }
