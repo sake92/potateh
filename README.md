@@ -133,7 +133,7 @@ You own the supplied executor and must shut it down separately.
 
 ## Development
 
-Build and test with Java 21 and Deder 0.22.2; Native builds also need clang and
+Build and test with Java 21 and Deder 0.23.0; Native builds also need clang and
 the Scala Native version pinned in `deder.pkl`.
 
 ```sh

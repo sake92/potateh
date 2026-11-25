@@ -17,9 +17,10 @@ To use a Scala Native snapshot, set `POTATEH_SCALA_NATIVE_VERSION` for the build
 
 ## JVM header benchmarks
 
-From the repository root, run JMH with the GC profiler to measure time and bytes allocated per operation:
+From the repository root, list the JVM benchmarks or run them with the GC profiler to measure time and bytes allocated per operation:
 
 ```sh
+deder exec -m header-jmh -t jmhList
 deder exec -t jmhRun -m header-jmh -- -bm avgt -tu ns -wi 2 -i 3 -w 500ms -r 500ms -f 2 -prof gc '.*HeaderBenchmark.*'
 ```
 
