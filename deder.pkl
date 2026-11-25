@@ -32,6 +32,7 @@ local const core = new CreateCrossModules {
     pomSettings = new {
       groupId = "ba.sake"
       artifactId = "potateh"
+      version = read?("env:POTATEH_VERSION")
       name = "potateh"
       description = "Blocking HTTP/1 server for Scala"
       url = "https://github.com/sake92/potateh"

@@ -50,6 +50,9 @@ jobs:
           else
             echo "snapshot=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "POTATEH_VERSION=$version" >> "$GITHUB_ENV"
+          # Restart Deder so subsequent steps inherit the locked version.
+          deder shutdown
       - run: sudo apt-get update && sudo apt-get install -y clang libunwind-dev libgc-dev
       - run: deder exec -t compile
       - run: deder exec -t test
@@ -63,6 +66,7 @@ jobs:
     timeout-minutes: 20
     env:
       DEDER_PUBLISH_SNAPSHOT: ${{ needs.test.outputs.snapshot }}
+      POTATEH_VERSION: ${{ needs.test.outputs.version }}
       DEDER_SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
       DEDER_SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
     steps:
