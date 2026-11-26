@@ -1,7 +1,7 @@
 # Run HTTP checks
 
-Use Linux, Java 21, Deder 0.23.0, Scala CLI, and clang/libunwind to build the
-fixtures and runner. External suites below also use Git, npm, and .NET SDK
+Use Linux, Java 21, Deder `early-access`, Scala CLI, and clang/libunwind to build
+the fixtures and runner. External suites below also use Git, npm, and .NET SDK
 10.0.100. External tools stay outside the library and under ignored
 `conformance/out`:
 
